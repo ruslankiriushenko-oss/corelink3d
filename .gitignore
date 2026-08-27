@@ -1,0 +1,11 @@
+node_modules/
+uploads/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+*.zip
+.cache/
+dist/
+build/

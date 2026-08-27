@@ -1,0 +1,28 @@
+{
+  "name": "corelink3d",
+  "version": "1.0.0",
+  "description": "CoreLink 3D — AI-powered 3D viewport with local LLM integration",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "nodemon server/index.js",
+    "test:donation": "tsx test-donation.ts"
+  },
+  "dependencies": {
+    "cors": "2.8.5",
+    "express": "4.18.2",
+    "multer": "^2.0.2",
+    "node-fetch": "2.7.0",
+    "uuid": "^11.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "nodemon": "3.0.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "viem": "2.21.54"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

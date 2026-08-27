@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CoreLink 3D — Interactive 3D Studio with AI Control</title>
+  <meta name="description" content="AI-powered 3D GLB Studio & Viewport with local LLM command interpretation, real-time material editing, environment presets, and deep mesh analytics." />
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="dark-theme">
+
+  <!-- ── HEADER ─────────────────────────────────────────── -->
+  <header class="header">
+    <div class="header-logo">
+      <div class="logo-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <div class="logo-title">
+        <span class="logo-text">CoreLink 3D</span>
+        <span class="logo-badge">STUDIO AI</span>
+      </div>
+      <button type="button" class="btn-donate-header" id="btnDonate" title="Support CoreLink 3D via USDC on Base">
+        <span class="donate-icon">♥</span>
+        <span>Donate / Support Project</span>
+      </button>
+    </div>
+
+    <div class="header-center">
+      <span class="session-label">SESSION:</span>
+      <span class="session-id" id="sessionId">Initializing...</span>
+    </div>
+
+    <div class="header-status">
+      <div class="status-indicator">
+        <span class="status-dot" id="statusDot"></span>
+        <span class="status-label" id="statusLabel">Checking AI...</span>
+      </div>
+      <span class="status-model" id="statusModel">Qwen 2.5 Coder 7B</span>
+      <div class="backend-toggle" id="backendToggle" title="Switch AI inference engine">
+        <button class="backend-btn active" data-backend="ollama">OLLAMA</button>
+        <button class="backend-btn" data-backend="vllm">vLLM</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── MAIN STUDIO LAYOUT ──────────────────────────────── -->
+  <main class="studio-layout">
+
+    <!-- LEFT PANEL: MATERIAL & LIGHTING CONTROL PANEL -->
+    <aside class="panel panel-left" id="panelLeft">
+      <div class="panel-header">
+        <h2 class="panel-title">MATERIAL & LIGHTING CONTROL PANEL</h2>
+      </div>
+
+      <div class="panel-content">
+        
+        <!-- CARD 1: MATERIAL EDITOR -->
+        <section class="card collapsible" id="cardMaterial">
+          <div class="card-header">
+            <span class="card-icon">🎨</span>
+            <h3 class="card-title">Material Editor</h3>
+            <span class="card-chevron">▼</span>
+          </div>
+          <div class="card-body">
+            <div class="form-group inline-row">
+              <label class="form-label" for="meshSelect">Target</label>
+              <select class="select-field" id="meshSelect">
+                <option value="all">Entire Model (All Meshes)</option>
+              </select>
+            </div>
+
+            <div class="form-group inline-row">
+              <label class="form-label">Base Color</label>
+              <div class="color-picker-wrapper">
+                <input type="color" class="color-input" id="baseColorInput" value="#ffffff" aria-label="Choose Color" />
+                <span class="color-action-label">Choose Color</span>
+                <input type="text" class="text-input color-hex-text" id="baseColorHex" value="#ffffff" maxLength="7" />
+              </div>
+            </div>
+
+            <div class="form-group slider-row">
+              <label class="form-label" for="metallicRange">Metallic</label>
+              <input type="range" class="range-slider" id="metallicRange" min="0" max="1" step="0.01" value="0.9" />
+              <span class="val-display" id="metallicVal">0.90</span>
+            </div>
+
+            <div class="form-group slider-row">
+              <label class="form-label" for="roughnessRange">Roughness</label>
+              <input type="range" class="range-slider" id="roughnessRange" min="0" max="1" step="0.01" value="0.2" />
+              <span class="val-display" id="roughnessVal">0.20</span>
+            </div>
+
+            <div class="form-group slider-row">
+              <label class="form-label" for="normalScaleRange">Normal</label>
+              <input type="range" class="range-slider" id="normalScaleRange" min="0" max="3" step="0.05" value="1.0" />
+              <span class="val-display" id="normalScaleVal">1.00</span>
+            </div>
+
+            <div class="form-group slider-row emissive-row">
+              <label class="form-label">Emissive</label>
+              <div class="emissive-color-line">
+                <input type="color" class="color-input" id="emissiveColorInput" value="#00f2fe" aria-label="Choose Color" />
+                <span class="color-action-label">Choose Color</span>
+              </div>
+              <div class="emissive-value-line">
+                <input type="range" class="range-slider" id="emissiveIntensityRange" min="0" max="5" step="0.1" value="0" />
+                <input type="text" class="text-input color-hex-text" id="emissiveColorHex" value="#00f2fe" maxLength="7" aria-label="Emissive color HEX" />
+                <span class="val-display" id="emissiveVal">0.00</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- CARD 2: SHADER SETTINGS -->
+        <section class="card collapsible" id="cardShader">
+          <div class="card-header">
+            <span class="card-icon">⚡</span>
+            <h3 class="card-title">Shader Settings</h3>
+            <span class="card-chevron">▼</span>
+          </div>
+          <div class="card-body">
+            <div class="button-group">
+              <button class="btn-toggle active" id="btnShaderPbr">PBR Standard</button>
+              <button class="btn-toggle" id="btnShaderCustom">Sci-Fi Overlay</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- CARD 3: LIGHT & ENVIRONMENT EDITOR -->
+        <section class="card collapsible" id="cardLight">
+          <div class="card-header">
+            <span class="card-icon">💡</span>
+            <h3 class="card-title">Light & Environment</h3>
+            <span class="card-chevron">▼</span>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Presets</label>
+              <div class="preset-grid">
+                <button class="preset-btn active" data-preset="studio">Studio</button>
+                <button class="preset-btn" data-preset="sunset">Sunset</button>
+                <button class="preset-btn" data-preset="cyberpunk">Cyberpunk</button>
+                <button class="preset-btn" data-preset="night">Night</button>
+              </div>
+            </div>
+
+            <div class="form-group slider-row">
+              <label class="form-label" for="ambientIntensity">Ambient</label>
+              <input type="range" class="range-slider" id="ambientIntensity" min="0" max="2" step="0.05" value="0.6" />
+              <span class="val-display" id="ambientIntensityVal">0.60</span>
+            </div>
+
+            <div class="form-group light-controls">
+              <label class="form-label">Light Sources</label>
+              <div class="light-control-row"><label for="keyLightEnabled">Key Light</label><input type="checkbox" id="keyLightEnabled" checked /><input type="text" class="light-color-input" id="keyLightColor" value="#FFFFFF" maxlength="7" aria-label="Key light color" /><input type="range" id="keyLightIntensityControl" min="0" max="5" step="0.05" value="1.5" /><span id="keyLightIntensityControlVal">1.50</span></div>
+              <div class="light-control-row"><label for="fillLightEnabled">Fill Light</label><input type="checkbox" id="fillLightEnabled" checked /><input type="text" class="light-color-input" id="fillLightColor" value="#4FACFE" maxlength="7" aria-label="Fill light color" /><input type="range" id="fillLightIntensity" min="0" max="5" step="0.05" value="0.4" /><span id="fillLightIntensityVal">0.40</span></div>
+              <div class="light-control-row"><label for="rimLightEnabled">Rim Light</label><input type="checkbox" id="rimLightEnabled" checked /><input type="text" class="light-color-input" id="rimLightColor" value="#00F2FE" maxlength="7" aria-label="Rim light color" /><input type="range" id="rimLightIntensity" min="0" max="5" step="0.05" value="0.6" /><span id="rimLightIntensityVal">0.60</span></div>
+            </div>
+
+            <div class="form-group slider-row">
+              <label class="form-label" for="exposureControl">Exposure</label>
+              <input type="range" class="range-slider" id="exposureControl" min="0.25" max="3" step="0.05" value="1.1" />
+              <span class="val-display" id="exposureControlVal">1.10</span>
+            </div>
+
+            <div class="form-group environment-controls">
+              <label class="form-label" for="environmentFile">Custom Environment</label>
+              <div class="environment-file-picker"><input type="file" id="environmentFile" accept=".hdr,.exr,image/vnd.radiance,image/x-exr" hidden /><label class="choose-file-button" for="environmentFile">Choose File</label><span id="environmentFileName">No file selected</span></div>
+              <span class="environment-file-hint">Choose a 360-degree equirectangular environment map in HDR or EXR format.</span>
+              <div class="slider-row"><label class="form-label" for="environmentIntensity">Reflections</label><input type="range" class="range-slider" id="environmentIntensity" min="0" max="3" step="0.05" value="1" /><span class="val-display" id="environmentIntensityVal">1.00</span></div>
+              <div class="slider-row"><label class="form-label" for="backgroundIntensity">Background</label><input type="range" class="range-slider" id="backgroundIntensity" min="0" max="3" step="0.05" value="1" /><span class="val-display" id="backgroundIntensityVal">1.00</span></div>
+              <div class="slider-row"><label class="form-label" for="backgroundBlur">Background Blur</label><input type="range" class="range-slider" id="backgroundBlur" min="0" max="1" step="0.05" value="0" /><span class="val-display" id="backgroundBlurVal">0.00</span></div>
+              <div class="slider-row"><label class="form-label" for="skyboxRotation">Skybox Rotation</label><input type="range" class="range-slider" id="skyboxRotation" min="-3.14" max="3.14" step="0.05" value="0" /><span class="val-display" id="skyboxRotationVal">0.00</span></div>
+            </div>
+
+            <div class="form-group shader-effects">
+              <label class="form-label">Shader Effects</label>
+              <div class="toggle-row"><span>Wireframe Overlay</span><label class="switch"><input type="checkbox" id="wireframeOverlayToggle" /><span class="slider round"></span></label></div>
+              <div class="toggle-row"><span>Sci-Fi Grid Floor</span><label class="switch"><input type="checkbox" id="gridFloorToggle" checked /><span class="slider round"></span></label></div>
+              <div class="toggle-row"><span>Hologram Effect</span><label class="switch"><input type="checkbox" id="hologramToggle" /><span class="slider round"></span></label></div>
+            </div>
+
+            <div class="form-group toggle-row">
+              <span class="form-label">Cast Shadows</span>
+              <label class="switch">
+                <input type="checkbox" id="shadowToggle" checked />
+                <span class="slider round"></span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <!-- CARD 4: ASSET LIBRARY & EXPORT -->
+        <section class="card collapsible flex-grow-card" id="cardUpload">
+          <div class="card-header">
+            <span class="card-icon">📦</span>
+            <h3 class="card-title">Asset Library & Export</h3>
+            <span class="card-chevron">▼</span>
+          </div>
+          <div class="card-body card-body-flex">
+            <div class="upload-dropzone" id="uploadZone">
+              <input type="file" id="fileInput" accept=".glb,.gltf" hidden />
+              <div class="dropzone-content">
+                <div class="upload-icon">📁</div>
+                <div class="upload-text">Drop .GLB / .GLTF here</div>
+                <div class="upload-sub">or click to browse files</div>
+              </div>
+            </div>
+            <div class="upload-status" id="uploadStatus">Ready for 3D model</div>
+            <div class="asset-toolbar">
+              <button type="button" class="btn-trash-open" id="btnOpenTrash" title="Recycle Bin">
+                <span>🗑</span> Recycle Bin <span class="trash-count" id="trashCount">0</span>
+              </button>
+            </div>
+            <ul class="file-list" id="fileList">
+              <li class="file-list-empty">No models loaded</li>
+            </ul>
+
+            <!-- DEDICATED MODEL EXPORT SECTION -->
+            <div class="export-section" id="exportSection">
+              <div class="export-header">
+                <span class="export-icon">💾</span>
+                <span class="export-title">Export / Download Processed Model</span>
+              </div>
+              <p class="export-desc">
+                Save active 3D scene with modified PBR materials, colors, light settings, and scene transforms using Three.js GLTFExporter.
+              </p>
+              <div class="export-form-row">
+                <div class="export-field">
+                  <label for="exportFormatSelect" class="form-label">Format</label>
+                  <select id="exportFormatSelect" class="select-field">
+                    <option value="glb">Binary GLTF (.glb)</option>
+                    <option value="gltf">JSON GLTF (.gltf)</option>
+                  </select>
+                </div>
+                <button class="btn-export-primary" id="btnPanelExportGlb">
+                  <span class="btn-icon">📥</span>
+                  <span>Export Model</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+      </div>
+    </aside>
+
+    <!-- CENTER CANVAS: THREE.JS RENDERING ENGINE -->
+    <div class="canvas-container" id="canvasContainer">
+      
+      <!-- VIEWPORT TOOLBAR HEADER -->
+      <div class="viewport-header" id="viewportHeader">
+        <div class="window-controls">
+          <button class="dot red" id="btnWinClose" title="Close / Toggle UI Controls Overlay" aria-label="Close UI Controls"></button>
+          <button class="dot yellow" id="btnWinMinimize" title="Minimize / Reset Camera Focus" aria-label="Reset Camera Focus"></button>
+          <button class="dot green" id="btnWinFullscreen" title="Toggle Fullscreen Viewport Mode" aria-label="Toggle Fullscreen"></button>
+          <span class="viewport-title">3D Canvas — Three.js Engine</span>
+        </div>
+        <div class="viewport-quick-tools" id="viewportQuickTools">
+          <button class="tool-btn" id="btnResetCamera" title="Reset Camera View">🎥 Reset Cam</button>
+          <button class="tool-btn" id="btnToggleWireframe" title="Toggle Wireframe Mesh">🕸️ Wireframe</button>
+          <button class="tool-btn" id="btnToggleGrid" title="Toggle Floor Grid">🌐 Grid</button>
+          <button class="tool-btn" id="btnToggleAutoRotate" title="Toggle Auto Rotation">🔄 Rotate</button>
+          <button class="tool-btn accent-btn" id="btnExportGlb" title="Export Processed 3D Model (.GLB)">💾 Export .GLB</button>
+        </div>
+      </div>
+
+      <!-- CANVAS -->
+      <canvas id="viewport3d"></canvas>
+
+      <!-- CANVAS DROP OVERLAY -->
+      <div class="canvas-drop-overlay" id="canvasDropOverlay">
+        <div class="drop-message">
+          <span class="drop-icon">✨</span>
+          <span class="drop-main">Drop .GLB model to load</span>
+        </div>
+      </div>
+
+      <!-- HUD STATS OVERLAY -->
+      <div class="viewport-hud">
+        <div class="hud-badge"><span class="hud-label">POLYS:</span> <span class="hud-val" id="hudPolyCount">0</span></div>
+        <div class="hud-badge"><span class="hud-label">MESHES:</span> <span class="hud-val" id="hudMeshCount">0</span></div>
+        <div class="hud-badge"><span class="hud-label">FPS:</span> <span class="hud-val" id="hudFps">60</span></div>
+        <div class="hud-badge accent"><span class="hud-label">ENGINE:</span> <span class="hud-val">WebGL 2.0</span></div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT PANEL: 3D INSPECTOR & AI ASSISTANT -->
+    <aside class="panel panel-right" id="panelRight">
+      
+      <!-- TOP SECTION: 3D INSPECTOR / ANALYTICS -->
+      <section class="inspector-section">
+        <div class="panel-header">
+          <h2 class="panel-title">3D INSPECTOR / ANALYTICS</h2>
+        </div>
+
+        <div class="inspector-content">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-icon">📊</span>
+              <h3 class="card-title">GLB Scene Overview</h3>
+            </div>
+            <div class="card-body">
+              <div class="stats-grid">
+                <div class="stat-box">
+                  <span class="stat-label">Model Name</span>
+                  <span class="stat-val" id="infoModelName">SciFi Core</span>
+                </div>
+                <div class="stat-box">
+                  <span class="stat-label">Polycount</span>
+                  <span class="stat-val" id="infoPolyCount">0 Tris / 0 Verts</span>
+                </div>
+                <div class="stat-box">
+                  <span class="stat-label">Draw Calls</span>
+                  <span class="stat-val" id="infoDrawCalls">1</span>
+                </div>
+                <div class="stat-box">
+                  <span class="stat-label">Dimensions</span>
+                  <span class="stat-val" id="infoDimensions">—</span>
+                </div>
+              </div>
+
+              <div class="inspector-tree-container">
+                <div class="tree-header">
+                  <span class="tree-title">Mesh Node Hierarchy</span>
+                  <span class="tree-badge" id="meshCountBadge">0 Nodes</span>
+                </div>
+                <div class="mesh-tree-list" id="meshTreeList">
+                  <div class="tree-empty">No active meshes</div>
+                </div>
+              </div>
+
+              <div class="textures-list-container">
+                <div class="tree-header">
+                  <span class="tree-title">Extracted Textures & Maps</span>
+                </div>
+                <div class="textures-list" id="texturesList">
+                  <div class="texture-item"><span class="tex-type">Diffuse</span><span class="tex-info">Standard Material PBR</span></div>
+                  <div class="texture-item"><span class="tex-type">Normal</span><span class="tex-info">Generated Detail Map</span></div>
+                  <div class="texture-item"><span class="tex-type">Roughness</span><span class="tex-info">Channel 0 Map</span></div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- BOTTOM SECTION: AI ASSISTANT COMMAND WINDOW -->
+      <section class="ai-section">
+        <div class="panel-header">
+          <h2 class="panel-title">AI ASSISTANT COMMAND WINDOW</h2>
+        </div>
+
+        <div class="ai-content">
+          
+          <div class="ai-input-box">
+            <div class="ai-input-header">
+              <span class="ai-label">Interactive Natural Language Input</span>
+              <span class="ai-status-badge" id="aiStatusBadge">READY</span>
+            </div>
+            <textarea
+              class="ai-textarea"
+              id="aiInputPrompt"
+              placeholder="Enter 3D command (e.g. 'Make car matte dark blue with metallic reflections')"
+              rows="2"
+            ></textarea>
+            
+            <div class="ai-submit-row">
+              <button class="btn-ai-submit" id="btnSendAiCommand">
+                <span>RUN AI COMMAND</span>
+                <span class="btn-arrow">→</span>
+              </button>
+            </div>
+
+            <div class="suggestion-chips" id="suggestionChips">
+              <button class="chip-btn" data-prompt="Change material color to metallic cyan #00f2fe with 0.1 roughness">Cyan Metallic</button>
+              <button class="chip-btn" data-prompt="Switch lighting environment to Cyberpunk preset with wireframe enabled">Cyberpunk Wireframe</button>
+              <button class="chip-btn" data-prompt="Make model matte dark red with sunset environment">Sunset Dark Red</button>
+              <button class="chip-btn" data-prompt="Reset camera view and enable studio environment">Reset Studio</button>
+            </div>
+          </div>
+
+          <div class="ai-output-box">
+            <div class="output-header">
+              <span class="output-title">CONVERTED JSON CONTROL COMMANDS</span>
+              <span class="output-sub">Qwen 2.5 Coder 7B Interpreter</span>
+            </div>
+            <pre class="json-code-block"><code id="jsonOutput">{
+  "status": "awaiting_command",
+  "instructions": "Enter prompt above to generate JSON actions"
+}</code></pre>
+            <div class="execution-footer" id="executionFooter">
+              <span class="exec-dot green"></span>
+              <span class="exec-text" id="execStatusText">Awaiting input</span>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </aside>
+
+  </main>
+
+  <!-- ── DONATION MODAL (USDC / Base) ─────────────────────── -->
+  <div class="modal-overlay" id="donateModal" role="dialog" aria-labelledby="donateModalTitle">
+    <div class="modal-box donate-modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="donateModalTitle">Support CoreLink 3D</h3>
+        <button type="button" class="modal-close" id="donateModalClose" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="donate-warning">
+          <strong>Notice:</strong> Please ensure you send funds strictly via <strong>USDC or ETH on the Base Network</strong>.
+        </p>
+        <div class="direct-payment-card">
+          <div class="direct-payment-network">
+            <span class="network-dot"></span>
+            <span>Base Network</span>
+            <span class="network-token">USDC / ETH / ERC-20</span>
+          </div>
+          <div class="direct-payment-content">
+            <div class="direct-payment-address-group">
+              <span class="form-label">Recipient wallet address</span>
+              <div class="direct-payment-address-row">
+                <code id="donateRecipientAddress">0x3c93728119510665AA6d916Fd95e92330D7d0850</code>
+                <button type="button" class="btn-copy-address" id="btnCopyDonateAddress" aria-label="Copy recipient wallet address">Copy Address</button>
+              </div>
+              <span class="copy-feedback" id="donateCopyFeedback" role="status" aria-live="polite"></span>
+            </div>
+            <div class="donate-qr-wrap">
+              <img id="donateQrCode" alt="QR code for the CoreLink 3D recipient wallet address" width="144" height="144" />
+              <span>Scan to pay</span>
+            </div>
+          </div>
+        </div>
+        <p class="donate-network-note">Send directly from your wallet. No wallet connection or approval is required by CoreLink 3D.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RECYCLE BIN MODAL ─────────────────────────────────── -->
+  <div class="modal-overlay" id="trashModal" role="dialog" aria-labelledby="trashModalTitle">
+    <div class="modal-box trash-modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="trashModalTitle">Recycle Bin / Trash</h3>
+        <button type="button" class="modal-close" id="trashModalClose" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="trash-desc">Deleted assets are kept here until you restore or permanently remove them.</p>
+        <ul class="trash-list" id="trashList">
+          <li class="trash-empty">Trash is empty</li>
+        </ul>
+        <button type="button" class="btn-danger-outline" id="btnEmptyTrash" style="margin-top:12px;">Empty Trash Permanently</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three.js import map -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+  
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

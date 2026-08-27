@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CoreLink 3D</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Roboto+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/main.css" />
+</head>
+<body>
+
+  <!-- ── HEADER ─────────────────────────────────────────── -->
+  <header class="header">
+    <div class="header-logo">
+      <span class="logo-mark">◈</span>
+      <span class="logo-text">CoreLink 3D</span>
+    </div>
+
+    <div class="header-center">
+      <span class="session-label">SESSION</span>
+      <span class="session-id" id="sessionId">—</span>
+    </div>
+
+    <div class="header-status">
+      <span class="status-dot" id="statusDot"></span>
+      <span class="status-label" id="statusLabel">Connecting...</span>
+      <span class="status-model" id="statusModel"></span>
+      <div class="backend-toggle" id="backendToggle" title="Switch AI backend">
+        <button class="backend-btn active" data-backend="ollama">OLLAMA</button>
+        <button class="backend-btn" data-backend="vllm">vLLM</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── LAYOUT ─────────────────────────────────────────── -->
+  <main class="layout">
+
+    <!-- LEFT PANEL -->
+    <aside class="panel-left">
+
+      <section class="panel-section">
+        <h2 class="section-title">3D MODEL</h2>
+
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="fileInput" accept=".glb,.gltf" hidden />
+          <div class="upload-inner">
+            <span class="upload-icon">⬆</span>
+            <span class="upload-label">Drop .GLB / .GLTF<br/>or click to browse</span>
+          </div>
+        </div>
+
+        <div class="upload-status" id="uploadStatus"></div>
+
+        <div class="model-controls">
+          <button class="btn-ghost" id="btnResetCamera">Reset Camera</button>
+          <button class="btn-ghost" id="btnToggleGrid">Toggle Grid</button>
+          <button class="btn-ghost" id="btnToggleWire">Wireframe</button>
+          <button class="btn-ghost" id="btnToggleAnim">Animations</button>
+        </div>
+
+        <div class="model-info" id="modelInfo"></div>
+      </section>
+
+      <section class="panel-section">
+        <h2 class="section-title">LOADED FILES</h2>
+        <ul class="file-list" id="fileList">
+          <li class="file-list-empty">No models loaded</li>
+        </ul>
+      </section>
+
+      <section class="panel-section">
+        <h2 class="section-title">VIEWPORT</h2>
+        <div class="option-row">
+          <label class="option-label">Background</label>
+          <select class="select-flat" id="bgSelect">
+            <option value="000000">Void Black</option>
+            <option value="0a0a0a">Deep Dark</option>
+            <option value="080c14">Midnight Blue</option>
+            <option value="0f0f0f">Graphite</option>
+          </select>
+        </div>
+        <div class="option-row">
+          <label class="option-label">Exposure</label>
+          <input type="range" class="range-flat" id="exposureRange" min="0.1" max="3" step="0.05" value="1" />
+        </div>
+        <div class="option-row">
+          <label class="option-label">Rotation</label>
+          <input type="range" class="range-flat" id="rotationRange" min="0" max="10" step="0.1" value="0" />
+        </div>
+      </section>
+
+    </aside>
+
+    <!-- CENTER: 3D VIEWPORT -->
+    <div class="viewport-container">
+      <canvas id="viewport3d"></canvas>
+
+      <div class="viewport-overlay" id="viewportOverlay">
+        <div class="viewport-drop-hint">
+          <span class="drop-icon">◈</span>
+          <span class="drop-text">Load a .GLB model to begin</span>
+          <span class="drop-sub">Drag & drop or use the panel</span>
+        </div>
+      </div>
+
+      <div class="viewport-hud">
+        <span id="hudPolyCount"></span>
+        <span id="hudMeshCount"></span>
+        <span id="hudFps"></span>
+      </div>
+
+      <!-- Viewport drag-drop target -->
+      <div class="viewport-drop-zone" id="viewportDropZone"></div>
+    </div>
+
+    <!-- RIGHT PANEL: AI CHAT -->
+    <aside class="panel-right">
+      <section class="panel-section chat-section">
+        <h2 class="section-title">AI ASSISTANT</h2>
+
+        <div class="chat-messages" id="chatMessages">
+          <div class="chat-msg system">
+            <span class="msg-role">SYSTEM</span>
+            <span class="msg-text">CoreLink 3D ready. Load a model and ask anything about your scene.</span>
+          </div>
+        </div>
+
+        <div class="chat-input-area">
+          <textarea
+            class="chat-input"
+            id="chatInput"
+            placeholder="Ask about your 3D model, geometry, materials..."
+            rows="3"
+          ></textarea>
+          <div class="chat-actions">
+            <button class="btn-flat" id="btnSend">
+              <span>SEND</span>
+              <span class="btn-icon">→</span>
+            </button>
+            <button class="btn-ghost small" id="btnClearChat">Clear</button>
+            <button class="btn-ghost small" id="btnNewSession">New Session</button>
+          </div>
+          <div class="chat-suggestions" id="chatSuggestions">
+            <button class="suggestion-chip" data-prompt="Analyze the geometry and overall structure of this 3D model in detail.">Analyze geometry</button>
+            <button class="suggestion-chip" data-prompt="What PBR materials and textures would look best for this model?">Suggest materials</button>
+            <button class="suggestion-chip" data-prompt="How can I optimize this model for real-time rendering in a game engine?">Optimize for RT</button>
+            <button class="suggestion-chip" data-prompt="What is the polygon count and how can I reduce it without losing visual quality?">Reduce polygons</button>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+  </main>
+
+  <!-- Three.js import map -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="/js/viewport.js"></script>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
