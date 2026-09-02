@@ -4,6 +4,7 @@
  */
 
 import viewer3d from './viewer3d.js';
+import { clearSavedModelFile, getSavedModelFile } from './modelStorage.js';
 
 class AssetManager {
   constructor() {
@@ -77,10 +78,14 @@ class AssetManager {
 
     this.activeAssetId = assetId;
 
-    if (asset.type === 'demo') {
+      if (asset.type === 'demo') {
+      clearSavedModelFile().catch((error) => console.warn('[AssetManager] Could not clear saved model:', error));
       viewer3d.createDemoModel();
     } else if (asset.url) {
       await viewer3d.loadModel(asset.url);
+    } else {
+      const savedModel = await getSavedModelFile();
+      if (savedModel?.blob) await viewer3d.loadModelFromFile(savedModel.blob);
     }
 
     this._notify();
@@ -98,6 +103,9 @@ class AssetManager {
     });
 
     if (this.activeAssetId === assetId) {
+      if (asset.type === 'upload') {
+        clearSavedModelFile().catch((error) => console.warn('[AssetManager] Could not clear saved model:', error));
+      }
       this.activeAssetId = this.activeAssets[0]?.id || null;
       if (this.activeAssets[0]) {
         this.activateAsset(this.activeAssets[0].id).catch(console.error);

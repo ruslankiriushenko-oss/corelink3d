@@ -1696,6 +1696,79 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
   word-break: break-all;
 }
 
+.webgl-fallback {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--text-muted);
+  text-align: center;
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 900px) {
+  html, body {
+    min-height: 100%;
+    height: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .header {
+    position: sticky;
+    height: auto;
+    min-height: var(--header-h);
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 6px 10px;
+  }
+
+  .header-logo { min-width: 0; }
+  .logo-badge, .btn-donate-header, .session-label, .status-model { display: none; }
+  .header-center { margin-left: auto; }
+  .header-status { width: 100%; justify-content: space-between; }
+
+  .studio-layout {
+    position: relative;
+    top: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .canvas-container {
+    order: -1;
+    height: min(62vh, 560px);
+    min-height: 320px;
+    flex: none;
+  }
+
+  .panel {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .panel-content {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .panel-left, .panel-right { border: 0; }
+  .inspector-section, .ai-section { max-height: none; overflow: visible; }
+  .inspector-content, .ai-content { overflow: visible; }
+  .viewport-quick-tools { flex-wrap: wrap; }
+}
+
+@media (max-width: 560px) {
+  .header-logo { flex: 1; }
+  .header-center { max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .logo-text { font-size: 14px; }
+  .canvas-container { height: 52vh; min-height: 280px; }
+  .viewport-title { font-size: 10px; }
+  .viewport-quick-tools .tool-btn { padding: 4px 6px; font-size: 10px; }
+}
+
 .execution-footer {
   display: flex;
   align-items: center;

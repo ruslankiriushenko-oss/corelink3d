@@ -7,6 +7,7 @@ import viewer3d from './viewer3d.js';
 import uiManager from './ui.js';
 import donationManager from './donationManager.js';
 import assetManager from './assetManager.js';
+import { getSavedModelFile } from './modelStorage.js';
 
 class AppController {
   constructor() {
@@ -28,14 +29,26 @@ class AppController {
     uiManager.init(this.sessionId);
     donationManager.init();
 
-    if (!assetManager.getState().active.length) {
-      assetManager.registerDemo('SciFi_Core_Demo.glb');
-    }
+    await this.restoreSavedModelOrDemo();
 
     // 4. Backend Toggle Handlers
     this.bindBackendToggle();
 
     console.log('[CoreLink 3D] Studio initialized successfully.');
+  }
+
+  async restoreSavedModelOrDemo() {
+    try {
+      const savedModel = await getSavedModelFile();
+      if (savedModel?.blob) {
+        await viewer3d.loadModelFromFile(savedModel.blob);
+        assetManager.registerUpload(savedModel.name, null);
+        return;
+      }
+    } catch (error) {
+      console.warn('[AppController] Saved model restore failed, loading demo:', error.message);
+    }
+    if (!assetManager.getState().active.length) assetManager.registerDemo('SciFi_Core_Demo.glb');
   }
 
   async initSession() {

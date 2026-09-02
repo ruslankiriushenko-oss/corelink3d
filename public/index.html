@@ -2,9 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>CoreLink 3D — Interactive 3D Studio with AI Control</title>
   <meta name="description" content="AI-powered 3D GLB Studio & Viewport with local LLM command interpretation, real-time material editing, environment presets, and deep mesh analytics." />
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-0E0T7NFRYM"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-0E0T7NFRYM');
+  </script>
   
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -214,7 +223,7 @@
           </div>
           <div class="card-body card-body-flex">
             <div class="upload-dropzone" id="uploadZone">
-              <input type="file" id="fileInput" accept=".glb,.gltf" hidden />
+              <input type="file" id="fileInput" accept=".glb,.gltf,.obj,.fbx" hidden />
               <div class="dropzone-content">
                 <div class="upload-icon">📁</div>
                 <div class="upload-text">Drop .GLB / .GLTF here</div>

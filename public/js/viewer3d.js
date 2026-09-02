@@ -8,6 +8,17 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader }    from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader }   from 'three/addons/loaders/DRACOLoader.js';
 import { GLTFExporter }  from 'three/addons/exporters/GLTFExporter.js';
+import { OBJLoader }     from 'three/addons/loaders/OBJLoader.js';
+import { FBXLoader }     from 'three/addons/loaders/FBXLoader.js';
+
+function isWebGLAvailable() {
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(window.WebGLRenderingContext && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
+  } catch (error) {
+    return false;
+  }
+}
 
 class Viewer3D {
   constructor(canvasId) {
@@ -34,7 +45,8 @@ class Viewer3D {
     this.animFrameId     = null;
     this.resizeObserver  = null;
     this.disposed        = false;
-    this._hologramState  = new Map();
+    this._originalMaterials = new Map();
+    this._hologramMaterials = new Map();
     this.environmentTexture = null;
     this.environmentSourceTexture = null;
     this.environmentIntensity = 1;
@@ -60,6 +72,11 @@ class Viewer3D {
       return;
     }
 
+    if (!isWebGLAvailable()) {
+      this._showWebGLFallback();
+      return;
+    }
+
     const container = this.canvas.parentElement;
     const width  = container.clientWidth  || 800;
     const height = container.clientHeight || 600;
@@ -73,12 +90,19 @@ class Viewer3D {
     this.camera.position.set(2.5, 2.0, 3.5);
 
     // 3. Renderer
-    this.renderer = new THREE.WebGLRenderer({
-      canvas:          this.canvas,
-      antialias:       true,
-      alpha:           false,
-      powerPreference: 'high-performance',
-    });
+    try {
+      this.renderer = new THREE.WebGLRenderer({
+        canvas:          this.canvas,
+        antialias:       true,
+        alpha:           false,
+        powerPreference: 'high-performance',
+      });
+    } catch (error) {
+      console.error('[Viewer3D] WebGL initialization failed:', error);
+      this.scene = null;
+      this._showWebGLFallback();
+      return;
+    }
     this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping         = THREE.ACESFilmicToneMapping;
@@ -116,6 +140,15 @@ class Viewer3D {
     this._animate();
   }
 
+  _showWebGLFallback() {
+    if (!this.canvas?.parentElement) return;
+    this.canvas.hidden = true;
+    const message = document.createElement('div');
+    message.className = 'webgl-fallback';
+    message.textContent = 'WebGL is unavailable. Enable hardware acceleration or use a compatible browser.';
+    this.canvas.parentElement.appendChild(message);
+  }
+
   _setupLights() {
     // Ambient
     this.lights.ambient = new THREE.AmbientLight(0xffffff, 0.6);
@@ -146,10 +179,14 @@ class Viewer3D {
    * for immediate interactive testing.
    */
   createDemoModel() {
+    if (!this.scene) return;
     if (this.currentModel) {
+      this._restoreOriginalMaterials();
       this.scene.remove(this.currentModel);
       this._disposeObject(this.currentModel);
     }
+
+    this._clearMaterialState();
 
     const group = new THREE.Group();
     group.name = 'SciFi_Core_Demo';
@@ -226,11 +263,17 @@ class Viewer3D {
    */
   loadModel(url, onProgress) {
     return new Promise((resolve, reject) => {
+      if (!this.renderer) {
+        reject(new Error('WebGL is unavailable on this device.'));
+        return;
+      }
       if (this.currentModel) {
+        this._restoreOriginalMaterials();
         this.scene.remove(this.currentModel);
         this._disposeObject(this.currentModel);
         this.currentModel = null;
       }
+      this._clearMaterialState();
       if (this.mixer) {
         this.mixer.stopAllAction();
         this.mixer = null;
@@ -249,31 +292,7 @@ class Viewer3D {
           const model = gltf.scene;
           model.name = gltf.scene.name || 'Loaded_GLB_Model';
 
-          // Center and normalize model bounds
-          const box    = new THREE.Box3().setFromObject(model);
-          const center = box.getCenter(new THREE.Vector3());
-          const size   = box.getSize(new THREE.Vector3());
-
-          model.position.sub(center);
-          const maxDim = Math.max(size.x, size.y, size.z);
-          if (maxDim > 0) {
-            model.scale.setScalar(3.0 / maxDim);
-          }
-
-          // Enable shadows and apply wireframe if active
-          model.traverse((child) => {
-            if (child.isMesh) {
-              child.castShadow = true;
-              child.receiveShadow = true;
-              if (this.wireframeMode && child.material) {
-                const mats = Array.isArray(child.material) ? child.material : [child.material];
-                mats.forEach(m => { m.wireframe = true; });
-              }
-            }
-          });
-
-          this.scene.add(model);
-          this.currentModel = model;
+          this._addLoadedModel(model, gltf.animations || []);
 
           // Animations
           if (gltf.animations && gltf.animations.length > 0) {
@@ -299,6 +318,89 @@ class Viewer3D {
         }
       );
     });
+  }
+
+  loadModelFromFile(file, onProgress) {
+    return new Promise((resolve, reject) => {
+      if (!this.renderer) {
+        reject(new Error('WebGL is unavailable on this device.'));
+        return;
+      }
+
+      const extension = file.name.split('.').pop().toLowerCase();
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error || new Error('Could not read model file.'));
+      reader.onprogress = (event) => {
+        if (onProgress && event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+      };
+      reader.onload = () => {
+        try {
+          if (extension === 'obj') {
+            const model = new OBJLoader().parse(new TextDecoder().decode(reader.result));
+            this._addLoadedModel(model);
+            resolve(this.getStats());
+            return;
+          }
+          if (extension === 'fbx') {
+            const model = new FBXLoader().parse(reader.result, '');
+            this._addLoadedModel(model, model.animations || []);
+            resolve(this.getStats());
+            return;
+          }
+          if (extension === 'glb' || extension === 'gltf') {
+            const loader = new GLTFLoader();
+            const dracoLoader = new DRACOLoader();
+            dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/');
+            loader.setDRACOLoader(dracoLoader);
+            const source = extension === 'gltf' ? new TextDecoder().decode(reader.result) : reader.result;
+            loader.parse(source, '', (gltf) => {
+              this._addLoadedModel(gltf.scene, gltf.animations || []);
+              resolve(this.getStats());
+            }, reject);
+            return;
+          }
+          reject(new Error(`Unsupported model format: .${extension}`));
+        } catch (error) {
+          reject(error);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  _addLoadedModel(model, animations = []) {
+    if (this.currentModel) {
+      this._restoreOriginalMaterials();
+      this.scene.remove(this.currentModel);
+      this._disposeObject(this.currentModel);
+    }
+    this._clearMaterialState();
+    model.name = model.name || 'Loaded_3D_Model';
+    const box = new THREE.Box3().setFromObject(model);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    model.position.sub(center);
+    const maxDim = Math.max(size.x, size.y, size.z);
+    if (maxDim > 0) model.scale.setScalar(3.0 / maxDim);
+    model.traverse((child) => {
+      if (!child.isMesh) return;
+      child.castShadow = true;
+      child.receiveShadow = true;
+      if (this.wireframeMode && child.material) {
+        (Array.isArray(child.material) ? child.material : [child.material]).forEach((material) => { material.wireframe = true; });
+      }
+    });
+    this.scene.add(model);
+    this.currentModel = model;
+    if (animations.length) {
+      this.mixer = new THREE.AnimationMixer(model);
+      this.animActions = animations.map((clip) => {
+        const action = this.mixer.clipAction(clip);
+        action.play();
+        return action;
+      });
+    }
+    this.resetCamera();
   }
 
   _animate() {
@@ -578,25 +680,52 @@ class Viewer3D {
     if (!this.currentModel) return;
     this.currentModel.traverse((child) => {
       if (!child.isMesh || !child.material) return;
-      const materials = Array.isArray(child.material) ? child.material : [child.material];
-      materials.forEach((material) => {
-        if (enabled) {
-          if (!this._hologramState.has(material)) this._hologramState.set(material, { opacity: material.opacity, transparent: material.transparent });
-          material.transparent = true;
-          material.opacity = 0.68;
-          if (material.emissive) material.emissive.set(0x00f2fe);
-          if ('emissiveIntensity' in material) material.emissiveIntensity = Math.max(material.emissiveIntensity || 0, 0.8);
-        } else {
-          const state = this._hologramState.get(material);
-          if (state) {
-            material.opacity = state.opacity;
-            material.transparent = state.transparent;
-            this._hologramState.delete(material);
-          }
+      if (enabled) {
+        if (!this._originalMaterials.has(child.uuid)) {
+          this._originalMaterials.set(child.uuid, child.material);
         }
-        material.needsUpdate = true;
-      });
+        if (!this._hologramMaterials.has(child.uuid)) {
+          const sourceMaterials = Array.isArray(child.material) ? child.material : [child.material];
+          const hologramMaterials = sourceMaterials.map((source) => {
+            const material = source.clone();
+            material.transparent = true;
+            material.opacity = 0.68;
+            if (material.emissive) material.emissive.set(0x00f2fe);
+            if ('emissiveIntensity' in material) material.emissiveIntensity = Math.max(material.emissiveIntensity || 0, 0.8);
+            material.needsUpdate = true;
+            return material;
+          });
+          const hologramMaterial = Array.isArray(child.material) ? hologramMaterials : hologramMaterials[0];
+          this._hologramMaterials.set(child.uuid, hologramMaterial);
+          child.material = hologramMaterial;
+        }
+      } else if (this._originalMaterials.has(child.uuid)) {
+        const hologramMaterial = this._hologramMaterials.get(child.uuid);
+        (Array.isArray(hologramMaterial) ? hologramMaterial : [hologramMaterial]).filter(Boolean).forEach((material) => material.dispose());
+        child.material = this._originalMaterials.get(child.uuid);
+        const originalMaterials = Array.isArray(child.material) ? child.material : [child.material];
+        originalMaterials.forEach((material) => { material.needsUpdate = true; });
+        this._hologramMaterials.delete(child.uuid);
+        this._originalMaterials.delete(child.uuid);
+      }
     });
+  }
+
+  _restoreOriginalMaterials() {
+    if (!this.currentModel) return;
+    this.currentModel.traverse((child) => {
+      if (!child.isMesh || !this._originalMaterials.has(child.uuid)) return;
+      const hologramMaterial = this._hologramMaterials.get(child.uuid);
+      (Array.isArray(hologramMaterial) ? hologramMaterial : [hologramMaterial]).filter(Boolean).forEach((material) => material.dispose());
+      child.material = this._originalMaterials.get(child.uuid);
+      const originalMaterials = Array.isArray(child.material) ? child.material : [child.material];
+      originalMaterials.forEach((material) => { material.needsUpdate = true; });
+    });
+  }
+
+  _clearMaterialState() {
+    this._hologramMaterials.clear();
+    this._originalMaterials.clear();
   }
 
   getStats() {
@@ -634,10 +763,12 @@ class Viewer3D {
 
   clearModel() {
     if (this.currentModel) {
+      this._restoreOriginalMaterials();
       this.scene.remove(this.currentModel);
       this._disposeObject(this.currentModel);
       this.currentModel = null;
     }
+    this._clearMaterialState();
     if (this.mixer) {
       this.mixer.stopAllAction();
       this.mixer = null;
@@ -668,7 +799,10 @@ class Viewer3D {
     if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
     if (this.resizeObserver) this.resizeObserver.disconnect();
     if (this.controls) this.controls.dispose();
-    if (this.currentModel) this._disposeObject(this.currentModel);
+    if (this.currentModel) {
+      this._restoreOriginalMaterials();
+      this._disposeObject(this.currentModel);
+    }
     if (this.gridHelper) this._disposeObject(this.gridHelper);
     if (this.backgroundSphere) {
       this.backgroundSphere.geometry.dispose();

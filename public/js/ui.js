@@ -9,6 +9,7 @@ import environmentManager from './environmentManager.js';
 import modelInspector     from './modelInspector.js';
 import aiController       from './aiController.js';
 import assetManager       from './assetManager.js';
+import { saveModelFile }  from './modelStorage.js';
 
 class UIManager {
   constructor() {
@@ -379,9 +380,9 @@ class UIManager {
     const uploadStatus = document.getElementById('uploadStatus');
     const ext = file.name.split('.').pop().toLowerCase();
 
-    if (ext !== 'glb' && ext !== 'gltf') {
+    if (!['glb', 'gltf', 'obj', 'fbx'].includes(ext)) {
       if (uploadStatus) {
-        uploadStatus.textContent = 'Only .GLB and .GLTF files supported!';
+        uploadStatus.textContent = 'Supported formats: .GLB, .GLTF, .OBJ, .FBX';
         uploadStatus.className = 'upload-status error';
       }
       return;
@@ -392,36 +393,24 @@ class UIManager {
       uploadStatus.className = 'upload-status loading';
     }
 
-    const formData = new FormData();
-    formData.append('model', file);
-
     try {
-      const res = await fetch('/api/glb/upload', {
-        method: 'POST',
-        body: formData
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Upload failed');
-      }
+      await saveModelFile(file);
 
       if (uploadStatus) {
-        uploadStatus.textContent = `Loading ${data.originalName}...`;
+        uploadStatus.textContent = `Loading ${file.name}...`;
         uploadStatus.className = 'upload-status loading';
       }
 
-      // Load into Three.js Viewer
-      await viewer3d.loadModel(data.url, (pct) => {
-        if (uploadStatus) uploadStatus.textContent = `Loading ${data.originalName} (${pct}%)`;
+      await viewer3d.loadModelFromFile(file, (pct) => {
+        if (uploadStatus) uploadStatus.textContent = `Loading ${file.name} (${pct}%)`;
       });
 
       if (uploadStatus) {
-        uploadStatus.textContent = `Loaded: ${data.originalName}`;
+        uploadStatus.textContent = `Loaded: ${file.name}`;
         uploadStatus.className = 'upload-status success';
       }
 
-      this._addFileToList(data.originalName, data.url);
+      this._addFileToList(file.name, null);
       this.updateInspectorUI();
 
     } catch (err) {
@@ -488,7 +477,7 @@ class UIManager {
         <li class="file-item ${isActive ? 'active' : ''}" data-asset-id="${asset.id}">
           <span class="file-icon">📦</span>
           <span class="file-name" title="${safeName}">${safeName}</span>
-          <span class="file-tag">${asset.type === 'demo' ? 'DEMO' : 'GLB'}</span>
+          <span class="file-tag">${asset.type === 'demo' ? 'DEMO' : (asset.name.split('.').pop() || 'MODEL').toUpperCase()}</span>
           <button type="button" class="file-remove" data-remove-asset-id="${asset.id}" aria-label="Delete ${asset.name}">✕</button>
         </li>
       `;
