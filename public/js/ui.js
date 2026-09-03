@@ -15,6 +15,7 @@ class UIManager {
   constructor() {
     this.sessionId = null;
     this.uploadedFiles = [];
+    this.isUploadInProgress = false;
   }
 
   _escapeHtml(value) {
@@ -225,6 +226,7 @@ class UIManager {
     const btnToggleWireframe  = document.getElementById('btnToggleWireframe');
     const btnToggleGrid       = document.getElementById('btnToggleGrid');
     const btnToggleAutoRotate = document.getElementById('btnToggleAutoRotate');
+    const btnToggleOrbitLight = document.getElementById('btnToggleOrbitLight');
     const btnExportGlb        = document.getElementById('btnExportGlb');
     const btnPanelExportGlb   = document.getElementById('btnPanelExportGlb');
     const exportFormatSelect  = document.getElementById('exportFormatSelect');
@@ -259,6 +261,13 @@ class UIManager {
       btnToggleAutoRotate.addEventListener('click', () => {
         const active = viewer3d.toggleAutoRotate();
         btnToggleAutoRotate.classList.toggle('active', active);
+      });
+    }
+
+    if (btnToggleOrbitLight) {
+      btnToggleOrbitLight.addEventListener('click', () => {
+        const active = viewer3d.toggleOrbitLight();
+        btnToggleOrbitLight.classList.toggle('active', active);
       });
     }
 
@@ -377,19 +386,54 @@ class UIManager {
   }
 
   async uploadAndLoadModel(file) {
-    const uploadStatus = document.getElementById('uploadStatus');
-    const ext = file.name.split('.').pop().toLowerCase();
+    // Rate limiting check
+    if (this.isUploadInProgress) {
+      console.warn('[UIManager] Upload already in progress, ignoring new request');
+      return;
+    }
 
-    if (!['glb', 'gltf', 'obj', 'fbx'].includes(ext)) {
+    const fileInput = document.getElementById('fileInput');
+    const uploadStatus = document.getElementById('uploadStatus');
+    
+    // Input validation
+    if (!file || !(file instanceof File)) {
+      if (uploadStatus) {
+        uploadStatus.textContent = 'Invalid file object';
+        uploadStatus.className = 'upload-status error';
+      }
+      if (fileInput) fileInput.value = '';
+      return;
+    }
+
+    // File size validation (100MB limit)
+    const maxSizeMB = 100;
+    if (file.size > maxSizeMB * 1024 * 1024) {
+      if (uploadStatus) {
+        uploadStatus.textContent = `File size exceeds ${maxSizeMB}MB limit`;
+        uploadStatus.className = 'upload-status error';
+      }
+      if (fileInput) fileInput.value = '';
+      return;
+    }
+
+    // File extension validation - strict check
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const allowedExts = ['glb', 'gltf', 'obj', 'fbx'];
+    if (!allowedExts.includes(ext)) {
       if (uploadStatus) {
         uploadStatus.textContent = 'Supported formats: .GLB, .GLTF, .OBJ, .FBX';
         uploadStatus.className = 'upload-status error';
       }
+      if (fileInput) fileInput.value = '';
       return;
     }
 
+    // Sanitize filename for display
+    const sanitizedName = this._escapeHtml(file.name);
+
+    this.isUploadInProgress = true;
     if (uploadStatus) {
-      uploadStatus.textContent = `Uploading ${file.name}...`;
+      uploadStatus.textContent = `Uploading ${sanitizedName}...`;
       uploadStatus.className = 'upload-status loading';
     }
 
@@ -397,16 +441,16 @@ class UIManager {
       await saveModelFile(file);
 
       if (uploadStatus) {
-        uploadStatus.textContent = `Loading ${file.name}...`;
+        uploadStatus.textContent = `Loading ${sanitizedName}...`;
         uploadStatus.className = 'upload-status loading';
       }
 
       await viewer3d.loadModelFromFile(file, (pct) => {
-        if (uploadStatus) uploadStatus.textContent = `Loading ${file.name} (${pct}%)`;
+        if (uploadStatus) uploadStatus.textContent = `Loading ${sanitizedName} (${pct}%)`;
       });
 
       if (uploadStatus) {
-        uploadStatus.textContent = `Loaded: ${file.name}`;
+        uploadStatus.textContent = `Loaded: ${sanitizedName}`;
         uploadStatus.className = 'upload-status success';
       }
 
@@ -416,9 +460,13 @@ class UIManager {
     } catch (err) {
       console.error('[UIManager] Upload/Load error:', err);
       if (uploadStatus) {
-        uploadStatus.textContent = `Error: ${err.message}`;
+        uploadStatus.textContent = `Error: ${this._escapeHtml(err.message || 'Unknown error')}`;
         uploadStatus.className = 'upload-status error';
       }
+    } finally {
+      this.isUploadInProgress = false;
+      // Always reset file input to allow re-selection of same file
+      if (fileInput) fileInput.value = '';
     }
   }
 

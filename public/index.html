@@ -44,8 +44,35 @@
         <span class="logo-badge">STUDIO AI</span>
       </div>
       <button type="button" class="btn-donate-header" id="btnDonate" title="Support CoreLink 3D via USDC on Base">
-        <span class="donate-icon">♥</span>
+        <span class="donate-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+          </svg>
+        </span>
         <span>Donate / Support Project</span>
+      </button>
+      <button type="button" class="btn-header-action" id="btnContact" title="Contact us with feedback or inquiries">
+        <span class="contact-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="4" width="20" height="16" rx="2"/>
+            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+          </svg>
+        </span>
+        <span>Contact / Feedback</span>
+      </button>
+      <button type="button" class="btn-header-action" id="btnAbout" title="Learn more about CoreLink 3D">
+        <span class="about-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4M12 8h.01"/>
+          </svg>
+        </span>
+        <span>About Project</span>
+      </button>
+      <button type="button" class="btn-mobile-menu" id="btnMobileMenu" title="Toggle mobile menu" aria-label="Toggle menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>
+        </svg>
       </button>
     </div>
 
@@ -67,6 +94,38 @@
     </div>
   </header>
 
+  <!-- ── MOBILE NAVIGATION DRAWER ─────────────────────── -->
+  <div class="mobile-menu-drawer" id="mobileMenuDrawer">
+    <div class="mobile-menu-content">
+      <button type="button" class="mobile-menu-item" id="btnMobileContact">
+        <span class="mobile-menu-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="4" width="20" height="16" rx="2"/>
+            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+          </svg>
+        </span>
+        Contact / Feedback
+      </button>
+      <button type="button" class="mobile-menu-item" id="btnMobileAbout">
+        <span class="mobile-menu-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4M12 8h.01"/>
+          </svg>
+        </span>
+        About Project
+      </button>
+      <button type="button" class="mobile-menu-item" id="btnMobileDonate">
+        <span class="mobile-menu-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+          </svg>
+        </span>
+        Support Project
+      </button>
+    </div>
+  </div>
+
   <!-- ── MAIN STUDIO LAYOUT ──────────────────────────────── -->
   <main class="studio-layout">
 
@@ -81,7 +140,12 @@
         <!-- CARD 1: MATERIAL EDITOR -->
         <section class="card collapsible" id="cardMaterial">
           <div class="card-header">
-            <span class="card-icon">🎨</span>
+            <span class="card-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="1"/><circle cx="19" cy="3" r="1"/><circle cx="21" cy="9" r="1"/>
+                <path d="M3 3h2c.1 0 .2 0 .3.1l18 9c.2.1.2.3 0 .4l-18 9c-.2.1-.2.1-.3.1H3c-.6 0-1-.4-1-1V4c0-.6.4-1 1-1z"/>
+              </svg>
+            </span>
             <h3 class="card-title">Material Editor</h3>
             <span class="card-chevron">▼</span>
           </div>
@@ -138,7 +202,11 @@
         <!-- CARD 2: SHADER SETTINGS -->
         <section class="card collapsible" id="cardShader">
           <div class="card-header">
-            <span class="card-icon">⚡</span>
+            <span class="card-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
+            </span>
             <h3 class="card-title">Shader Settings</h3>
             <span class="card-chevron">▼</span>
           </div>
@@ -153,7 +221,12 @@
         <!-- CARD 3: LIGHT & ENVIRONMENT EDITOR -->
         <section class="card collapsible" id="cardLight">
           <div class="card-header">
-            <span class="card-icon">💡</span>
+            <span class="card-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 21H9v-2h6v2zM17.8 19c1.1-1.7 1.2-3.8 0-5.8-2.4-4.1-8.4-4.1-10.8 0-1.2 2-1 4.1 0 5.8m-11.6 0H2v2h4v-2z"/>
+                <path d="M12 2v5m5.63 1.37L20.49 5.5M5.51 5.5 2.37 8.37M18 12h5m-18 0H1M17 20.29l3.13 3.13M4 20.29.87 23.42"/>
+              </svg>
+            </span>
             <h3 class="card-title">Light & Environment</h3>
             <span class="card-chevron">▼</span>
           </div>
@@ -217,7 +290,12 @@
         <!-- CARD 4: ASSET LIBRARY & EXPORT -->
         <section class="card collapsible flex-grow-card" id="cardUpload">
           <div class="card-header">
-            <span class="card-icon">📦</span>
+            <span class="card-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8c0-1-1-2-2-2H5c-1 0-2 1-2 2v8c0 1 1 2 2 2h14c1 0 2-1 2-2z"/>
+                <path d="M3.27 6.96A2.85 2.85 0 0 1 5 6h14a2.9 2.9 0 0 1 1.73.96M3.27 17.04A2.85 2.85 0 0 0 5 18h14a2.9 2.9 0 0 0 1.73-.96"/>
+              </svg>
+            </span>
             <h3 class="card-title">Asset Library & Export</h3>
             <span class="card-chevron">▼</span>
           </div>
@@ -233,7 +311,12 @@
             <div class="upload-status" id="uploadStatus">Ready for 3D model</div>
             <div class="asset-toolbar">
               <button type="button" class="btn-trash-open" id="btnOpenTrash" title="Recycle Bin">
-                <span>🗑</span> Recycle Bin <span class="trash-count" id="trashCount">0</span>
+                <span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+                  </svg>
+                </span>
+                Recycle Bin <span class="trash-count" id="trashCount">0</span>
               </button>
             </div>
             <ul class="file-list" id="fileList">
@@ -243,7 +326,11 @@
             <!-- DEDICATED MODEL EXPORT SECTION -->
             <div class="export-section" id="exportSection">
               <div class="export-header">
-                <span class="export-icon">💾</span>
+                <span class="export-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+                  </svg>
+                </span>
                 <span class="export-title">Export / Download Processed Model</span>
               </div>
               <p class="export-desc">
@@ -282,11 +369,36 @@
           <span class="viewport-title">3D Canvas — Three.js Engine</span>
         </div>
         <div class="viewport-quick-tools" id="viewportQuickTools">
-          <button class="tool-btn" id="btnResetCamera" title="Reset Camera View">🎥 Reset Cam</button>
-          <button class="tool-btn" id="btnToggleWireframe" title="Toggle Wireframe Mesh">🕸️ Wireframe</button>
-          <button class="tool-btn" id="btnToggleGrid" title="Toggle Floor Grid">🌐 Grid</button>
-          <button class="tool-btn" id="btnToggleAutoRotate" title="Toggle Auto Rotation">🔄 Rotate</button>
-          <button class="tool-btn accent-btn" id="btnExportGlb" title="Export Processed 3D Model (.GLB)">💾 Export .GLB</button>
+          <button class="tool-btn" id="btnResetCamera" title="Reset Camera View">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
+            </svg>
+            Reset Cam
+          </button>
+          <button class="tool-btn" id="btnToggleWireframe" title="Toggle Wireframe Mesh">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 12h18M12 3v18M6 6l12 12M18 6L6 18"/>
+            </svg>
+            Wireframe
+          </button>
+          <button class="tool-btn" id="btnToggleGrid" title="Toggle Floor Grid">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20 10 10 0 0 1 0-20"/><path d="M2 12h20M12 2v20"/>
+            </svg>
+            Grid
+          </button>
+          <button class="tool-btn" id="btnToggleAutoRotate" title="Toggle Auto Rotation">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36M20.49 15a9 9 0 0 1-14.85 3.36"/>
+            </svg>
+            Rotate
+          </button>
+          <button class="tool-btn" id="btnToggleOrbitLight" title="Toggle Orbiting Light">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="8"/><circle cx="12" cy="4" r="2"/><path d="M12 12L12 2"/>
+            </svg>
+            Light Orbit
+          </button>
         </div>
       </div>
 
@@ -296,7 +408,11 @@
       <!-- CANVAS DROP OVERLAY -->
       <div class="canvas-drop-overlay" id="canvasDropOverlay">
         <div class="drop-message">
-          <span class="drop-icon">✨</span>
+          <span class="drop-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+              <path d="M12 2L15.09 8.26H22L17.55 12.5L19.64 18.76L12 14.5L4.36 18.76L6.45 12.5L2 8.26H8.91L12 2Z"/>
+            </svg>
+          </span>
           <span class="drop-main">Drop .GLB model to load</span>
         </div>
       </div>
@@ -323,7 +439,11 @@
         <div class="inspector-content">
           <div class="card">
             <div class="card-header">
-              <span class="card-icon">📊</span>
+              <span class="card-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                </svg>
+              </span>
               <h3 class="card-title">GLB Scene Overview</h3>
             </div>
             <div class="card-body">
@@ -434,7 +554,11 @@
     <div class="modal-box donate-modal" onclick="event.stopPropagation()">
       <div class="modal-header">
         <h3 id="donateModalTitle">Support CoreLink 3D</h3>
-        <button type="button" class="modal-close" id="donateModalClose" aria-label="Close">✕</button>
+        <button type="button" class="modal-close" id="donateModalClose" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
       <div class="modal-body">
         <p class="donate-warning">
@@ -471,7 +595,11 @@
     <div class="modal-box trash-modal" onclick="event.stopPropagation()">
       <div class="modal-header">
         <h3 id="trashModalTitle">Recycle Bin / Trash</h3>
-        <button type="button" class="modal-close" id="trashModalClose" aria-label="Close">✕</button>
+        <button type="button" class="modal-close" id="trashModalClose" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
       <div class="modal-body">
         <p class="trash-desc">Deleted assets are kept here until you restore or permanently remove them.</p>
@@ -479,6 +607,66 @@
           <li class="trash-empty">Trash is empty</li>
         </ul>
         <button type="button" class="btn-danger-outline" id="btnEmptyTrash" style="margin-top:12px;">Empty Trash Permanently</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CONTACT & FEEDBACK MODAL ─────────────────────────── -->
+  <div class="modal-overlay" id="contactModal" role="dialog" aria-labelledby="contactModalTitle">
+    <div class="modal-box contact-modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="contactModalTitle">Contact & Feedback</h3>
+        <button type="button" class="modal-close" id="contactModalClose" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="contact-description">
+          For suggestions, feedback, feature requests, advertising, and business inquiries, feel free to reach out:
+        </p>
+        <div class="contact-card">
+          <div class="email-section">
+            <span class="email-label">Email Address</span>
+            <div class="email-row">
+              <a href="mailto:ruslankiriushenko@gmail.com" class="email-link" id="contactEmailLink">ruslankiriushenko@gmail.com</a>
+              <button type="button" class="btn-copy-email" id="btnCopyContactEmail" aria-label="Copy email address">Copy Email</button>
+            </div>
+            <span class="copy-feedback" id="contactCopyFeedback" role="status" aria-live="polite"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ABOUT PROJECT MODAL ─────────────────────────────── -->
+  <div class="modal-overlay" id="aboutModal" role="dialog" aria-labelledby="aboutModalTitle">
+    <div class="modal-box about-modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="aboutModalTitle">About CoreLink 3D Studio AI</h3>
+        <button type="button" class="modal-close" id="aboutModalClose" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="about-content">
+          <p class="about-intro">
+            CoreLink 3D Studio AI is an advanced browser-based 3D workspace powered by Three.js (WebGL 2.0) and integrated local AI LLMs (Qwen 2.5 Coder 7B via Ollama &amp; vLLM). It enables creators to inspect, edit, and manipulate 3D models and lighting environments using real-time natural language commands.
+          </p>
+          
+          <div class="about-features">
+            <h4 class="about-subtitle">Key Features:</h4>
+            <ul class="about-list">
+              <li><strong>AI Natural Language Control:</strong> Control PBR materials, shaders, camera views, and lighting setups via an interactive AI assistant interpreter.</li>
+              <li><strong>Advanced Material &amp; Shader Editor:</strong> Real-time adjustments for Metallic, Roughness, Normal, and Emissive properties, including custom Sci-Fi Overlay and Wireframe modes.</li>
+              <li><strong>Lighting &amp; Environment Presets:</strong> Customizable studio, sunset, cyberpunk, and night lighting setups with live HDRI map support.</li>
+              <li><strong>3D Inspector &amp; Analytics:</strong> Detailed mesh node hierarchy inspection, draw call analytics, poly/vert count metrics, and GLTF/GLB binary scene export.</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   </div>

@@ -36,6 +36,10 @@ class Viewer3D {
     this.wireframeMode   = false;
     this.isAutoRotating  = false;
     this.autoRotateSpeed = 0.5;
+    this.isLightOrbiting = false;
+    this.orbitLightSpeed = 1.0;
+    this.orbitLightAngle = 0;
+    this.isPageVisible   = true;
     
     // FPS stats
     this.frameCount      = 0;
@@ -133,10 +137,19 @@ class Viewer3D {
     this.resizeObserver = new ResizeObserver(() => this.onResize());
     this.resizeObserver.observe(container);
 
-    // 8. Create Default Procedural Sci-Fi Demo Model
+    // 8. Visibility Change Detection (Performance Optimization)
+    this.isPageVisible = document.visibilityState !== 'hidden';
+    document.addEventListener('visibilitychange', () => {
+      this.isPageVisible = document.visibilityState === 'visible';
+      if (this.isPageVisible) {
+        this.fpsStart = performance.now();
+      }
+    });
+
+    // 9. Create Default Procedural Sci-Fi Demo Model
     this.createDemoModel();
 
-    // 9. Start Render Loop
+    // 10. Start Render Loop
     this._animate();
   }
 
@@ -407,6 +420,11 @@ class Viewer3D {
     if (this.disposed) return;
     this.animFrameId = requestAnimationFrame(() => this._animate());
 
+    // Skip rendering if page is hidden (performance optimization)
+    if (!this.isPageVisible) {
+      return;
+    }
+
     const delta = this.clock.getDelta();
 
     // Advance GLB animations
@@ -417,6 +435,16 @@ class Viewer3D {
     // Auto rotate model
     if (this.isAutoRotating && this.currentModel) {
       this.currentModel.rotation.y += this.autoRotateSpeed * delta;
+    }
+
+    // Orbit light around model
+    if (this.isLightOrbiting && this.lights.key) {
+      this.orbitLightAngle += this.orbitLightSpeed * delta;
+      const radius = 4;
+      const height = 2;
+      this.lights.key.position.x = Math.cos(this.orbitLightAngle) * radius;
+      this.lights.key.position.z = Math.sin(this.orbitLightAngle) * radius;
+      this.lights.key.position.y = height;
     }
 
     this.controls.update();
@@ -565,6 +593,11 @@ class Viewer3D {
   toggleAutoRotate() {
     this.isAutoRotating = !this.isAutoRotating;
     return this.isAutoRotating;
+  }
+
+  toggleOrbitLight() {
+    this.isLightOrbiting = !this.isLightOrbiting;
+    return this.isLightOrbiting;
   }
 
   setShadows(enabled) {
@@ -777,16 +810,23 @@ class Viewer3D {
   }
 
   _disposeObject(obj) {
+    if (!obj) return;
     obj.traverse((child) => {
       if (child.isMesh) {
-        if (child.geometry) child.geometry.dispose();
+        if (child.geometry) {
+          child.geometry.dispose();
+        }
         if (child.material) {
           const mats = Array.isArray(child.material) ? child.material : [child.material];
           mats.forEach(m => {
-            Object.values(m).forEach((value) => {
-              if (value && value.isTexture) value.dispose();
-            });
-            m.dispose();
+            if (m) {
+              Object.values(m).forEach((value) => {
+                if (value && value.isTexture) {
+                  value.dispose();
+                }
+              });
+              m.dispose();
+            }
           });
         }
       }
@@ -799,21 +839,55 @@ class Viewer3D {
     if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
     if (this.resizeObserver) this.resizeObserver.disconnect();
     if (this.controls) this.controls.dispose();
+    
+    // Properly dispose of current model and all cached materials
     if (this.currentModel) {
       this._restoreOriginalMaterials();
       this._disposeObject(this.currentModel);
+      this.currentModel = null;
     }
+
+    // Dispose hologram materials
+    this._hologramMaterials.forEach((materials) => {
+      const mats = Array.isArray(materials) ? materials : [materials];
+      mats.forEach(m => {
+        if (m && m.dispose) m.dispose();
+      });
+    });
+    this._hologramMaterials.clear();
+    this._originalMaterials.clear();
+
+    // Dispose grid and background
     if (this.gridHelper) this._disposeObject(this.gridHelper);
     if (this.backgroundSphere) {
-      this.backgroundSphere.geometry.dispose();
-      this.backgroundSphere.material.dispose();
+      if (this.backgroundSphere.geometry) this.backgroundSphere.geometry.dispose();
+      if (this.backgroundSphere.material) this.backgroundSphere.material.dispose();
     }
+
+    // Dispose textures
     if (this.environmentTexture) this.environmentTexture.dispose();
+    if (this.environmentSourceTexture) this.environmentSourceTexture.dispose();
+
+    // Dispose lights
+    Object.values(this.lights).forEach(light => {
+      if (light && this.scene && this.scene.remove) {
+        this.scene.remove(light);
+      }
+    });
+
+    // Dispose renderer
     if (this.renderer) {
       this.renderer.dispose();
-      this.renderer.forceContextLoss();
+      try {
+        this.renderer.forceContextLoss();
+      } catch (e) {
+        console.warn('[Viewer3D] Could not force WebGL context loss:', e);
+      }
     }
+
     this.scene = null;
+    this.camera = null;
+    this.renderer = null;
     this.currentModel = null;
   }
 }
