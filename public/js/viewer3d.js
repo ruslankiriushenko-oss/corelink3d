@@ -10,6 +10,8 @@ import { DRACOLoader }   from 'three/addons/loaders/DRACOLoader.js';
 import { GLTFExporter }  from 'three/addons/exporters/GLTFExporter.js';
 import { OBJLoader }     from 'three/addons/loaders/OBJLoader.js';
 import { FBXLoader }     from 'three/addons/loaders/FBXLoader.js';
+import { sanitizeModelFilename, validateModelFile } from './modelValidation.js';
+import { getSavedModelFile, saveModelFile } from './modelStorage.js';
 
 function isWebGLAvailable() {
   try {
@@ -19,6 +21,12 @@ function isWebGLAvailable() {
     return false;
   }
 }
+
+// Shared DRACOLoader singleton — avoids spawning a new WASM worker per model load.
+// One instance is reused for the lifetime of the page.
+const _sharedDraco = new DRACOLoader();
+_sharedDraco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/');
+_sharedDraco.preload();
 
 class Viewer3D {
   constructor(canvasId) {
@@ -51,13 +59,7 @@ class Viewer3D {
     this.disposed        = false;
     this._originalMaterials = new Map();
     this._hologramMaterials = new Map();
-    this.environmentTexture = null;
-    this.environmentSourceTexture = null;
     this.environmentIntensity = 1;
-    this.backgroundIntensity = 1;
-    this.backgroundBlur = 0;
-    this.environmentRotation = 0;
-    this.backgroundSphere = null;
 
     // Lights references
     this.lights = {
@@ -146,8 +148,8 @@ class Viewer3D {
       }
     });
 
-    // 9. Create Default Procedural Sci-Fi Demo Model
-    this.createDemoModel();
+    // 9. Load saved model or create demo
+    this._loadSavedModelOrCreateDemo();
 
     // 10. Start Render Loop
     this._animate();
@@ -160,6 +162,20 @@ class Viewer3D {
     message.className = 'webgl-fallback';
     message.textContent = 'WebGL is unavailable. Enable hardware acceleration or use a compatible browser.';
     this.canvas.parentElement.appendChild(message);
+  }
+
+  async _loadSavedModelOrCreateDemo() {
+    try {
+      const savedModel = await getSavedModelFile();
+      if (savedModel?.blob) {
+        await this.loadModelFromFile(savedModel.blob);
+      } else {
+        this.createDemoModel();
+      }
+    } catch (error) {
+      console.warn('[viewer3d] Could not load saved model, creating demo:', error);
+      this.createDemoModel();
+    }
   }
 
   _setupLights() {
@@ -293,11 +309,9 @@ class Viewer3D {
         this.animActions = [];
       }
 
-      const dracoLoader = new DRACOLoader();
-      dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/');
-
+      // Use shared singleton DRACO loader — avoids spawning a new WASM worker per load.
       const loader = new GLTFLoader();
-      loader.setDRACOLoader(dracoLoader);
+      loader.setDRACOLoader(_sharedDraco);
 
       loader.load(
         url,
@@ -333,14 +347,19 @@ class Viewer3D {
     });
   }
 
-  loadModelFromFile(file, onProgress) {
+  async loadModelFromFile(file, onProgress, optionalFilename) {
+    if (!file) throw new Error('No model file or data provided.');
+    const validated = await validateModelFile(file, optionalFilename || file.name);
     return new Promise((resolve, reject) => {
       if (!this.renderer) {
         reject(new Error('WebGL is unavailable on this device.'));
         return;
       }
 
-      const extension = file.name.split('.').pop().toLowerCase();
+      const fileName = validated.filename || sanitizeModelFilename(optionalFilename || file.name || (file instanceof File ? file.name : 'model.glb'));
+      const extension = (fileName ? fileName.split('.').pop() : 'glb').toLowerCase();
+      this.lastLoadedBlob = file;
+      this.lastLoadedFileName = fileName;
       const reader = new FileReader();
       reader.onerror = () => reject(reader.error || new Error('Could not read model file.'));
       reader.onprogress = (event) => {
@@ -361,10 +380,9 @@ class Viewer3D {
             return;
           }
           if (extension === 'glb' || extension === 'gltf') {
+            // Use shared singleton DRACO loader — avoids spawning a new WASM worker per load.
             const loader = new GLTFLoader();
-            const dracoLoader = new DRACOLoader();
-            dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/');
-            loader.setDRACOLoader(dracoLoader);
+            loader.setDRACOLoader(_sharedDraco);
             const source = extension === 'gltf' ? new TextDecoder().decode(reader.result) : reader.result;
             loader.parse(source, '', (gltf) => {
               this._addLoadedModel(gltf.scene, gltf.animations || []);
@@ -414,14 +432,29 @@ class Viewer3D {
       });
     }
     this.resetCamera();
+
+    // Auto-save loaded model to IndexedDB
+    if (this.lastLoadedBlob && this.lastLoadedFileName) {
+      saveModelFile(this.lastLoadedBlob, this.lastLoadedFileName).catch(err =>
+        console.warn('[viewer3d] Could not save model:', err)
+      );
+    }
+  }
+
+  pauseRendering() {
+    this.isRenderingPaused = true;
+  }
+
+  resumeRendering() {
+    this.isRenderingPaused = false;
   }
 
   _animate() {
     if (this.disposed) return;
     this.animFrameId = requestAnimationFrame(() => this._animate());
 
-    // Skip rendering if page is hidden (performance optimization)
-    if (!this.isPageVisible) {
+    // Skip rendering if page is hidden or paused for external editor
+    if (!this.isPageVisible || this.isRenderingPaused) {
       return;
     }
 
@@ -496,20 +529,31 @@ class Viewer3D {
     }
   }
 
+  hasActiveMeshes() {
+    if (!this.currentModel) return false;
+    let count = 0;
+    this.currentModel.traverse((child) => {
+      if (child.isMesh && child.visible && child.geometry && child.geometry.attributes?.position?.count > 0) {
+        count++;
+      }
+    });
+    return count > 0;
+  }
+
   /**
    * Export the active 3D model using Three.js GLTFExporter
    * @param {Object} options Options for export (format: 'glb'|'gltf', binary: boolean, embedImages: boolean)
    */
   exportModel(options = {}) {
     return new Promise((resolve, reject) => {
-      if (!this.currentModel) {
-        reject(new Error('No active model in scene to export.'));
+      if (!this.hasActiveMeshes()) {
+        reject(new Error('Cannot export: scene contains no active 3D meshes or nodes.'));
         return;
       }
 
       const exporter = new GLTFExporter();
       const format = (options.format || 'glb').toLowerCase();
-      const isBinary = format === 'glb' || options.binary !== false;
+      const isBinary = format === 'glb';
 
       const exportOptions = {
         binary: isBinary,
@@ -557,6 +601,178 @@ class Viewer3D {
         exportOptions
       );
     });
+  }
+
+  /**
+   * Export the active 3D model as an ArrayBuffer without triggering a browser download
+   * @param {Object} options
+   * @returns {Promise<{ buffer: ArrayBuffer, filename: string }>}
+   */
+  exportSceneGLBBuffer(options = {}) {
+    return new Promise((resolve, reject) => {
+      if (!this.hasActiveMeshes()) {
+        reject(new Error('Cannot export: scene contains no active 3D meshes or nodes.'));
+        return;
+      }
+
+      const exporter = new GLTFExporter();
+      const exportOptions = {
+        binary: true,
+        embedImages: options.embedImages !== false,
+        truncateDrawRange: true,
+        onlyVisible: true,
+        maxSamples: 4,
+      };
+
+      const defaultName = this.currentModel.name && this.currentModel.name !== 'Scene'
+        ? this.currentModel.name
+        : 'CoreLink_Model';
+      const filename = (options.filename || defaultName).replace(/\.[^/.]+$/, '');
+
+      exporter.parse(
+        this.currentModel,
+        (result) => {
+          if (result instanceof ArrayBuffer) {
+            resolve({ buffer: result, filename: `${filename}.glb` });
+          } else {
+            const output = JSON.stringify(result, null, 2);
+            const enc = new TextEncoder();
+            resolve({ buffer: enc.encode(output).buffer, filename: `${filename}.gltf` });
+          }
+        },
+        (error) => {
+          reject(error);
+        },
+        exportOptions
+      );
+    });
+  }
+
+  /**
+   * Serialize current scene parameters (camera, lights, environment, materials, view flags)
+   * @returns {Object} sceneState
+   */
+  getSceneState() {
+    const cameraState = this.camera ? {
+      position: this.camera.position.toArray(),
+      fov: this.camera.fov,
+      near: this.camera.near,
+      far: this.camera.far,
+    } : null;
+
+    const controlsTarget = this.controls ? this.controls.target.toArray() : [0, 0, 0];
+
+    const lightsState = {};
+    for (const [name, light] of Object.entries(this.lights)) {
+      if (light) {
+        lightsState[name] = {
+          intensity: light.intensity,
+          visible: light.visible,
+          color: '#' + light.color.getHexString(),
+          position: light.position ? light.position.toArray() : undefined,
+          castShadow: Boolean(light.castShadow),
+        };
+      }
+    }
+
+    const materialOverrides = [];
+    if (this.currentModel) {
+      this.currentModel.traverse((child) => {
+        if (child.isMesh && child.material) {
+          const mat = Array.isArray(child.material) ? child.material[0] : child.material;
+          if (mat) {
+            materialOverrides.push({
+              meshName: child.name,
+              color: mat.color ? '#' + mat.color.getHexString() : undefined,
+              roughness: mat.roughness,
+              metalness: mat.metalness,
+              opacity: mat.opacity,
+              transparent: mat.transparent,
+              wireframe: mat.wireframe,
+            });
+          }
+        }
+      });
+    }
+
+    return {
+      version: 1,
+      camera: cameraState,
+      target: controlsTarget,
+      lights: lightsState,
+      environment: {
+        exposure: this.renderer ? this.renderer.toneMappingExposure : 1.1,
+        environmentIntensity: this.environmentIntensity,
+        shadows: this.renderer ? this.renderer.shadowMap.enabled : true,
+      },
+      view: {
+        showGrid: this.showGrid,
+        wireframeMode: this.wireframeMode,
+      },
+      materials: materialOverrides,
+    };
+  }
+
+  /**
+   * Restore scene configuration from state object
+   * @param {Object} state
+   */
+  restoreSceneState(state) {
+    if (!state) return;
+
+    if (state.camera && this.camera) {
+      if (Array.isArray(state.camera.position)) this.camera.position.fromArray(state.camera.position);
+      if (state.camera.fov) this.camera.fov = state.camera.fov;
+      this.camera.updateProjectionMatrix();
+    }
+
+    if (state.target && this.controls) {
+      this.controls.target.fromArray(state.target);
+      this.controls.update();
+    }
+
+    if (state.lights) {
+      for (const [name, cfg] of Object.entries(state.lights)) {
+        if (this.lights[name] && cfg) {
+          if (cfg.intensity !== undefined) this.setLightIntensity(name, cfg.intensity);
+          if (cfg.visible !== undefined) this.setLightEnabled(name, cfg.visible);
+          if (cfg.color) this.setLightColor(name, cfg.color);
+        }
+      }
+    }
+
+    if (state.environment) {
+      const env = state.environment;
+      if (env.exposure !== undefined) this.setExposure(env.exposure);
+      if (env.environmentIntensity !== undefined) this.setEnvironmentIntensity(env.environmentIntensity);
+      if (env.shadows !== undefined) this.setShadows(env.shadows);
+    }
+
+    if (state.view) {
+      if (state.view.showGrid !== undefined) this.setGridVisible(state.view.showGrid);
+      if (state.view.wireframeMode !== undefined && state.view.wireframeMode !== this.wireframeMode) {
+        this.toggleWireframe();
+      }
+    }
+
+    if (Array.isArray(state.materials) && this.currentModel) {
+      this.currentModel.traverse((child) => {
+        if (child.isMesh && child.material) {
+          const override = state.materials.find(m => m.meshName === child.name);
+          if (override) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach(m => {
+              if (override.color && m.color) m.color.set(override.color);
+              if (override.roughness !== undefined && 'roughness' in m) m.roughness = override.roughness;
+              if (override.metalness !== undefined && 'metalness' in m) m.metalness = override.metalness;
+              if (override.opacity !== undefined) m.opacity = override.opacity;
+              if (override.transparent !== undefined) m.transparent = override.transparent;
+              m.needsUpdate = true;
+            });
+          }
+        }
+      });
+    }
   }
 
   toggleWireframe() {
@@ -621,49 +837,9 @@ class Viewer3D {
     if (this.renderer) this.renderer.toneMappingExposure = THREE.MathUtils.clamp(Number(value), 0.1, 5);
   }
 
-  setEnvironmentTexture(texture) {
-    if (this.environmentSourceTexture && this.environmentSourceTexture !== texture) this.environmentSourceTexture.dispose();
-    if (this.environmentTexture && this.environmentTexture !== texture) this.environmentTexture.dispose();
-    this.environmentSourceTexture = texture;
-    this.environmentTexture = texture;
-    if (this.scene) {
-      this.scene.environment = texture;
-      this.scene.background = texture;
-    }
-    this._applyEnvironmentSettings();
-  }
-
-  setEnvironmentTextures(backgroundTexture, environmentTexture) {
-    if (this.environmentSourceTexture && this.environmentSourceTexture !== backgroundTexture) this.environmentSourceTexture.dispose();
-    if (this.environmentTexture && this.environmentTexture !== environmentTexture) this.environmentTexture.dispose();
-    this.environmentSourceTexture = backgroundTexture;
-    this.environmentTexture = environmentTexture;
-    if (this.scene) {
-      this.scene.environment = environmentTexture;
-      this._setBackgroundSphere(backgroundTexture);
-    }
-    this._applyEnvironmentSettings();
-  }
-
   setEnvironmentIntensity(value) {
     this.environmentIntensity = THREE.MathUtils.clamp(Number(value), 0, 3);
     this._applyEnvironmentSettings();
-  }
-
-  setBackgroundIntensity(value) {
-    this.backgroundIntensity = THREE.MathUtils.clamp(Number(value), 0, 3);
-    if (this.backgroundSphere) this.backgroundSphere.material.uniforms.uIntensity.value = this.backgroundIntensity;
-    this._applyEnvironmentSettings();
-  }
-
-  setBackgroundBlur(value) {
-    this.backgroundBlur = THREE.MathUtils.clamp(Number(value), 0, 1);
-    if (this.backgroundSphere) this.backgroundSphere.material.uniforms.uBlur.value = this.backgroundBlur;
-  }
-
-  setEnvironmentRotation(value) {
-    this.environmentRotation = Number(value) || 0;
-    if (this.backgroundSphere) this.backgroundSphere.material.uniforms.uRotation.value = this.environmentRotation;
   }
 
   _applyEnvironmentSettings() {
@@ -676,32 +852,6 @@ class Viewer3D {
         material.needsUpdate = true;
       });
     });
-  }
-
-  _setBackgroundSphere(texture) {
-    if (!this.scene) return;
-    if (!this.backgroundSphere) {
-      const geometry = new THREE.SphereGeometry(100, 48, 32);
-      const material = new THREE.ShaderMaterial({
-        uniforms: {
-          uMap: { value: texture },
-          uIntensity: { value: this.backgroundIntensity },
-          uBlur: { value: this.backgroundBlur },
-          uRotation: { value: this.environmentRotation },
-        },
-        vertexShader: 'varying vec3 vDirection; void main() { vDirection = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-        fragmentShader: 'uniform sampler2D uMap; uniform float uIntensity; uniform float uBlur; uniform float uRotation; varying vec3 vDirection; vec2 uvFor(vec3 direction) { float angle = atan(direction.z, direction.x) + uRotation; return vec2(angle / 6.2831853 + 0.5, asin(clamp(direction.y, -1.0, 1.0)) / 3.1415926 + 0.5); } void main() { vec2 uv = uvFor(normalize(vDirection)); vec2 offset = vec2(0.0025 * uBlur); vec3 color = texture2D(uMap, uv).rgb; color += texture2D(uMap, uv + vec2(offset.x, 0.0)).rgb; color += texture2D(uMap, uv - vec2(offset.x, 0.0)).rgb; color += texture2D(uMap, uv + vec2(0.0, offset.y)).rgb; color += texture2D(uMap, uv - vec2(0.0, offset.y)).rgb; color /= 1.0 + 4.0 * uBlur; gl_FragColor = vec4(color * uIntensity, 1.0); }',
-        side: THREE.BackSide,
-        depthWrite: false,
-        depthTest: false,
-      });
-      this.backgroundSphere = new THREE.Mesh(geometry, material);
-      this.backgroundSphere.renderOrder = -1000;
-      this.scene.add(this.backgroundSphere);
-    } else {
-      this.backgroundSphere.material.uniforms.uMap.value = texture;
-    }
-    this.scene.background = null;
   }
 
   setGridVisible(visible) {
@@ -859,15 +1009,6 @@ class Viewer3D {
 
     // Dispose grid and background
     if (this.gridHelper) this._disposeObject(this.gridHelper);
-    if (this.backgroundSphere) {
-      if (this.backgroundSphere.geometry) this.backgroundSphere.geometry.dispose();
-      if (this.backgroundSphere.material) this.backgroundSphere.material.dispose();
-    }
-
-    // Dispose textures
-    if (this.environmentTexture) this.environmentTexture.dispose();
-    if (this.environmentSourceTexture) this.environmentSourceTexture.dispose();
-
     // Dispose lights
     Object.values(this.lights).forEach(light => {
       if (light && this.scene && this.scene.remove) {

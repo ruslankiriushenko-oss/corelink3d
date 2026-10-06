@@ -1,7 +1,7 @@
 # CoreLink 3D
 
-> AI-powered 3D viewport with local LLM integration.
-> Total Black aesthetic. macOS only.
+> 3D viewport editor with Blender-inspired dark theme.
+> macOS only.
 
 ---
 
@@ -24,46 +24,8 @@
 | 2 | Sources NVM + Homebrew paths (Apple Silicon & Intel) |
 | 3 | Checks Node.js ≥ 18, installs via Homebrew if missing |
 | 4 | Runs `npm install` only when needed (first run or package.json changed) |
-| 5 | Checks Ollama / vLLM status, starts Ollama daemon if installed |
-| 6 | Starts the backend server, polls `/api/health` until ready |
-| 7 | Opens `http://localhost:3000` via macOS `open` command |
-
----
-
-## AI Backend Setup
-
-CoreLink 3D supports two AI backends: **Ollama** (default) and **vLLM**.
-
-### Ollama (Recommended — easiest)
-
-```bash
-# Install
-brew install ollama
-
-# Pull a model (choose one)
-ollama pull qwen2.5-coder:7b    # recommended
-ollama pull llama3.2             # alternative
-ollama pull qwen2.5:7b           # alternative
-
-# Start daemon (start.command does this automatically)
-ollama serve
-```
-
-### vLLM (Advanced — GPU recommended)
-
-```bash
-pip install vllm
-
-# Start server
-python -m vllm.entrypoints.openai.api_server \
-  --model Qwen/Qwen2.5-Coder-7B-Instruct \
-  --host 0.0.0.0 --port 8000
-```
-
-Then launch with:
-```bash
-AI_BACKEND=vllm start.command
-```
+| 5 | Starts the backend server, polls `/api/health` until ready |
+| 6 | Opens `http://localhost:3000` via macOS `open` command |
 
 ---
 
@@ -74,11 +36,6 @@ Set these before double-clicking `start.command` (via Terminal or a `.env`-style
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3000` | HTTP server port |
-| `AI_BACKEND` | `ollama` | `ollama` or `vllm` |
-| `OLLAMA_URL` | `http://localhost:11434` | Ollama API URL |
-| `OLLAMA_MODEL` | `qwen2.5-coder:7b` | Model to use with Ollama |
-| `VLLM_URL` | `http://localhost:8000` | vLLM API URL |
-| `VLLM_MODEL` | `Qwen/Qwen2.5-Coder-7B-Instruct` | Model to use with vLLM |
 
 ---
 
@@ -92,14 +49,27 @@ CoreLink3D/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── server/
-│   └── index.js           ← Express server: REST API + session management
+│   └── index.js           ← Express server: REST API + file management
 ├── public/
-│   ├── app.html           ← Frontend (served dynamically — no index.html in root)
+│   ├── index.html         ← Main frontend
+│   ├── app.html           ← Alternative frontend
 │   ├── css/
-│   │   └── main.css       ← Total Black stylesheet
+│   │   └── main.css       ← Dark theme stylesheet
+│   │   └── styles.css     ← Blender-inspired styles
 │   └── js/
 │       ├── viewport.js    ← Three.js renderer (GLB/GLTF/DRACO/animations)
-│       └── app.js         ← UI controller, sessions, chat, file management
+│       ├── app.js         ← UI controller, file management
+│       ├── ui.js          ← UI event bindings
+│       ├── materialManager.js    ← Material properties
+│       ├── environmentManager.js  ← Environment lighting
+│       ├── modelInspector.js     ← Model analytics
+│       ├── viewer3d.js           ← 3D viewport control
+│       ├── webgpuEditor.js       ← WebGPU editor
+│       ├── assetManager.js       ← Asset management
+│       ├── projectBundle.js      ← Project save/load
+│       ├── modelStorage.js      ← File storage
+│       ├── modelValidation.js    ← File validation
+│       └── donationManager.js   ← Donation feature
 └── uploads/               ← GLB/GLTF uploads (auto-created, gitignored)
 ```
 
@@ -111,23 +81,7 @@ CoreLink3D/
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/health` | Server health, active backend, session count |
-| GET | `/api/ai/status` | Ollama + vLLM online status and model availability |
-
-### Sessions
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/session` | Create new chat session |
-| GET | `/api/session/:id` | Get session info + history |
-| DELETE | `/api/session/:id` | Clear session history |
-| GET | `/api/sessions` | List all active sessions |
-
-### AI Chat
-
-| Method | Endpoint | Body | Description |
-|--------|----------|------|-------------|
-| POST | `/api/chat` | `{ prompt, sessionId?, stream? }` | Send message to AI |
+| GET | `/api/health` | Server health check |
 
 ### 3D Files
 
@@ -145,9 +99,6 @@ CoreLink3D/
 ```bash
 # Build and start all services
 docker compose up -d
-
-# Pull AI model inside the Ollama container
-docker exec ollama ollama pull qwen2.5-coder:7b
 
 # View server logs
 docker compose logs -f corelink3d
@@ -177,6 +128,9 @@ hashes, verifies the `Approval` and `Transfer` logs, and prints receipt status.
 
 - `.glb` — Binary glTF (recommended, single file)
 - `.gltf` — JSON glTF
+- `.obj` — Wavefront OBJ
+- `.fbx` — Autodesk FBX
+- `.cl3d` — CoreLink 3D project bundle
 
 DRACO mesh compression is decoded automatically.
 Files up to **500 MB** are accepted.
@@ -190,9 +144,3 @@ Files up to **500 MB** are accepted.
 
 **Node.js not found even after Homebrew install**
 → Close Terminal, open it fresh, double-click start.command again
-
-**AI shows "Offline"**
-→ Run `ollama serve` in Terminal, then reload the page
-
-**Model not found**
-→ Run `ollama pull qwen2.5-coder:7b` in Terminal

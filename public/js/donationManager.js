@@ -27,9 +27,8 @@ class DonationManager {
       });
     }
 
-    if (addressElement && qrElement) {
-      const encodedData = encodeURIComponent(QR_DATA);
-      qrElement.src = `${QR_SERVICE}?size=288x288&data=${encodedData}`;
+    if (qrElement) {
+      this.renderQrCode(qrElement);
     }
 
     if (copyButton && addressElement && feedbackElement) {
@@ -49,6 +48,32 @@ class DonationManager {
         }, 2200);
       });
     }
+  }
+
+  renderQrCode(qrElement) {
+    if (window.QRCode && typeof window.QRCode.toDataURL === 'function') {
+      window.QRCode.toDataURL(QR_DATA, {
+        margin: 1,
+        width: 288,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      }, (err, url) => {
+        if (!err && url) {
+          qrElement.src = url;
+          return;
+        }
+        this.fallbackQr(qrElement);
+      });
+    } else {
+      this.fallbackQr(qrElement);
+    }
+  }
+
+  fallbackQr(qrElement) {
+    const encodedData = encodeURIComponent(QR_DATA);
+    qrElement.src = `${QR_SERVICE}?size=288x288&data=${encodedData}`;
   }
 }
 

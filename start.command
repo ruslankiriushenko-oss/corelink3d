@@ -25,8 +25,8 @@ cd "$SCRIPT_DIR"
 clear
 echo ""
 echo -e "${WHITE}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${WHITE}║           CoreLink 3D  v1.0.0                ║${NC}"
-echo -e "${WHITE}║     AI-Powered 3D Viewport for macOS         ║${NC}"
+echo -e "${WHITE}║           CoreLink 3D  v1.1.0                ║${NC}"
+echo -e "${WHITE}║     3D Viewport Editor for macOS           ║${NC}"
 echo -e "${WHITE}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -100,7 +100,7 @@ fi
 # =============================================================
 # STEP 2 — npm dependencies
 # =============================================================
-echo -e "${CYAN}[2/4] Checking dependencies...${NC}"
+echo -e "${CYAN}[2/3] Checking dependencies...${NC}"
 
 NEEDS_INSTALL=false
 if [ ! -d "node_modules" ]; then
@@ -123,56 +123,9 @@ else
 fi
 
 # =============================================================
-# STEP 3 — Ollama / vLLM check (optional)
+# STEP 3 — Start server & open browser
 # =============================================================
-echo -e "${CYAN}[3/4] Checking AI backend...${NC}"
-
-TARGET_MODEL="${OLLAMA_MODEL:-qwen2.5-coder:7b}"
-AI_BACKEND="${AI_BACKEND:-ollama}"
-
-if [ "$AI_BACKEND" = "vllm" ]; then
-  VLLM_URL="${VLLM_URL:-http://localhost:8000}"
-  echo -e "${DIM}Backend: vLLM at ${VLLM_URL}${NC}"
-  if curl -sf "${VLLM_URL}/v1/models" &>/dev/null; then
-    echo -e "${GREEN}✓ vLLM is online${NC}"
-  else
-    echo -e "${YELLOW}⚠ vLLM not reachable at ${VLLM_URL}${NC}"
-    echo -e "${DIM}  Start it with: python -m vllm.entrypoints.openai.api_server --model ${VLLM_MODEL:-Qwen/Qwen2.5-Coder-7B-Instruct}${NC}"
-  fi
-else
-  # Ollama path
-  echo -e "${DIM}Backend: Ollama (model: ${TARGET_MODEL})${NC}"
-
-  if command -v ollama &>/dev/null; then
-    if ollama list &>/dev/null 2>&1; then
-      echo -e "${GREEN}✓ Ollama is running${NC}"
-    else
-      echo -e "${YELLOW}Ollama found but not running — starting daemon...${NC}"
-      ollama serve &>/dev/null &
-      sleep 2
-    fi
-
-    # Check if target model is pulled
-    if ollama list 2>/dev/null | grep -q "${TARGET_MODEL%%:*}"; then
-      echo -e "${GREEN}✓ Model '${TARGET_MODEL}' is available${NC}"
-    else
-      echo -e "${YELLOW}⚠ Model '${TARGET_MODEL}' not found${NC}"
-      echo -e "${DIM}  Pull it with: ollama pull ${TARGET_MODEL}${NC}"
-      echo -e "${DIM}  AI chat will be disabled until the model is loaded.${NC}"
-    fi
-  else
-    echo -e "${YELLOW}⚠ Ollama not installed — AI chat will be disabled${NC}"
-    echo -e "${DIM}  Install from: https://ollama.ai${NC}"
-  fi
-fi
-
-export OLLAMA_MODEL="$TARGET_MODEL"
-export AI_BACKEND="$AI_BACKEND"
-
-# =============================================================
-# STEP 4 — Start server & open browser
-# =============================================================
-echo -e "${CYAN}[4/4] Starting CoreLink 3D server...${NC}"
+echo -e "${CYAN}[3/3] Starting CoreLink 3D server...${NC}"
 echo ""
 
 PORT="${PORT:-3000}"
@@ -213,7 +166,6 @@ echo -e "${GREEN}╔════════════════════
 echo -e "${GREEN}║         CoreLink 3D is running!              ║${NC}"
 echo -e "${GREEN}║                                              ║${NC}"
 echo -e "${GREEN}║   Open : ${HOST}                 ║${NC}"
-echo -e "${GREEN}║   Model: ${TARGET_MODEL}                     ║${NC}"
 echo -e "${GREEN}║                                              ║${NC}"
 echo -e "${GREEN}║   Press Ctrl+C to stop the server.           ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"

@@ -78,14 +78,19 @@ class AssetManager {
 
     this.activeAssetId = assetId;
 
+    // Do NOT manipulate the Three.js viewer while the WebGPU editor is open.
+    // The editor owns its own isolated scene and the viewer is paused.
+    const editorIsOpen = window.webgpuEditor && window.webgpuEditor.isOpen;
+    if (!editorIsOpen) {
       if (asset.type === 'demo') {
-      clearSavedModelFile().catch((error) => console.warn('[AssetManager] Could not clear saved model:', error));
-      viewer3d.createDemoModel();
-    } else if (asset.url) {
-      await viewer3d.loadModel(asset.url);
-    } else {
-      const savedModel = await getSavedModelFile();
-      if (savedModel?.blob) await viewer3d.loadModelFromFile(savedModel.blob);
+        clearSavedModelFile().catch((error) => console.warn('[AssetManager] Could not clear saved model:', error));
+        viewer3d.createDemoModel();
+      } else if (asset.url) {
+        await viewer3d.loadModel(asset.url);
+      } else {
+        const savedModel = await getSavedModelFile();
+        if (savedModel?.blob) await viewer3d.loadModelFromFile(savedModel.blob);
+      }
     }
 
     this._notify();
@@ -107,10 +112,16 @@ class AssetManager {
         clearSavedModelFile().catch((error) => console.warn('[AssetManager] Could not clear saved model:', error));
       }
       this.activeAssetId = this.activeAssets[0]?.id || null;
-      if (this.activeAssets[0]) {
-        this.activateAsset(this.activeAssets[0].id).catch(console.error);
-      } else {
-        viewer3d.clearModel();
+
+      // Do NOT manipulate the Three.js viewer while the WebGPU editor is open.
+      // The editor owns its own isolated scene; the viewer is paused.
+      const editorIsOpen = window.webgpuEditor && window.webgpuEditor.isOpen;
+      if (!editorIsOpen) {
+        if (this.activeAssets[0]) {
+          this.activateAsset(this.activeAssets[0].id).catch(console.error);
+        } else {
+          viewer3d.clearModel();
+        }
       }
     }
 

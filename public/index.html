@@ -3,10 +3,43 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>CoreLink 3D — Interactive 3D Studio with AI Control</title>
-  <meta name="description" content="AI-powered 3D GLB Studio & Viewport with local LLM command interpretation, real-time material editing, environment presets, and deep mesh analytics." />
+  <title>CoreLink 3D — Professional 3D Scene Studio</title>
+  <!-- ── PRIMARY META ─────────────────────────────────────────── -->
+  <meta name="description" content="CoreLink 3D — Professional high-performance 3D scene editor powered by Babylon.js and WebGPU. Model, light, export — all in the browser." />
+  <meta name="robots" content="index, follow" />
+  <meta name="author" content="CoreLink 3D" />
 
-  <!-- Google tag (gtag.js) -->
+  <!-- Favicon and App Icons -->
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <meta name="theme-color" content="#181818" />
+
+  <!-- ── OPEN GRAPH (Facebook, LinkedIn, Discord, Telegram, VK) ── -->
+  <meta property="og:type"        content="website" />
+  <meta property="og:site_name"   content="CoreLink 3D" />
+  <meta property="og:locale"      content="en_US" />
+  <meta property="og:url"         content="https://corelink3d.com/" />
+  <meta property="og:title"       content="CoreLink 3D — Professional 3D Scene Studio" />
+  <meta property="og:description" content="High-performance 3D scene editor powered by Babylon.js & WebGPU. Create, light, and export 3D scenes — right in the browser." />
+  <meta property="og:image"       content="https://corelink3d.com/og-image.jpg" />
+  <meta property="og:image:secure_url" content="https://corelink3d.com/og-image.jpg" />
+  <meta property="og:image:type"  content="image/jpeg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt"   content="CoreLink 3D — 3D Scene Editor" />
+
+  <!-- ── TWITTER / X CARD ─────────────────────────────────────── -->
+  <meta name="twitter:card"        content="summary_large_image" />
+  <meta name="twitter:site"        content="@CoreLink3D" />
+  <meta name="twitter:creator"     content="@CoreLink3D" />
+  <meta name="twitter:title"       content="CoreLink 3D — Professional 3D Scene Studio" />
+  <meta name="twitter:description" content="High-performance 3D scene editor powered by Babylon.js & WebGPU. Create, light, and export 3D scenes — right in the browser." />
+  <meta name="twitter:image"       content="https://corelink3d.com/og-image.jpg" />
+  <meta name="twitter:image:alt"   content="CoreLink 3D — 3D Scene Editor" />
+
+  <!-- ── GOOGLE ANALYTICS ─────────────────────────────────────── -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-0E0T7NFRYM"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -14,673 +47,774 @@
     gtag('js', new Date());
     gtag('config', 'G-0E0T7NFRYM');
   </script>
+
+  <!-- ── MICROSOFT CLARITY ─────────────────────────────────────
+       ВАЖНО: Для включения Clarity замените type="text/disabled"
+       на type="text/javascript" и укажите реальный Project ID из
+       https://clarity.microsoft.com → Settings → Overview → Code
+  ─────────────────────────────────────────────────────────────── -->
+  <script type="text/disabled" id="clarity-script">
+    (function(c,l,a,r,i,t,y){
+      c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+      t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+      y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window,document,"clarity","script","XXXXXXXXXX");
+  </script>
+
   
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   
   <link rel="stylesheet" href="/styles.css" />
-
-  <script type="text/javascript">
-    (function(c,l,a,r,i,t,y){
-        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-    })(window, document, "clarity", "script", "y9hfoi7zv6");
+  <script>
+    if (sessionStorage.getItem('corelink-splash-shown')) {
+      document.documentElement.classList.add('splash-hidden');
+    }
   </script>
+
+  <!-- Babylon.js WebGPU Engine & Loaders -->
+  <script src="https://cdn.jsdelivr.net/npm/babylonjs@7.11.0/babylon.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/babylonjs-loaders@7.11.0/babylonjs.loaders.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/babylonjs-materials@7.11.0/babylonjs.materials.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/babylonjs-gui@7.11.0/babylon.gui.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/babylonjs-serializers@7.11.0/babylonjs.serializers.min.js"></script>
+  <script src="/vendor/jszip.min.js"></script>
+  <script src="/vendor/qrcode.min.js"></script>
 </head>
-<body class="dark-theme">
+<body class="app-body">
 
-  <!-- ── HEADER ─────────────────────────────────────────── -->
-  <header class="header">
-    <div class="header-logo">
-      <div class="logo-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-        </svg>
+  <!-- SPLASH SCREEN -->
+  <div class="splash-screen" id="splashScreen">
+    <div class="splash-content">
+      <div class="splash-header">
+        <h1 class="splash-title">CoreLink 3D</h1>
       </div>
-      <div class="logo-title">
-        <span class="logo-text">CoreLink 3D</span>
-        <span class="logo-badge">STUDIO AI</span>
+      <div class="splash-image-container">
+        <img src="/dragon.jpg" alt="Dragon" class="splash-dragon" />
       </div>
-      <button type="button" class="btn-donate-header" id="btnDonate" title="Support CoreLink 3D via USDC on Base">
-        <span class="donate-icon">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-          </svg>
-        </span>
-        <span>Donate / Support Project</span>
-      </button>
-      <button type="button" class="btn-header-action" id="btnContact" title="Contact us with feedback or inquiries">
-        <span class="contact-icon">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="4" width="20" height="16" rx="2"/>
-            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-          </svg>
-        </span>
-        <span>Contact / Feedback</span>
-      </button>
-      <button type="button" class="btn-header-action" id="btnAbout" title="Learn more about CoreLink 3D">
-        <span class="about-icon">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 16v-4M12 8h.01"/>
-          </svg>
-        </span>
-        <span>About Project</span>
-      </button>
-      <button type="button" class="btn-mobile-menu" id="btnMobileMenu" title="Toggle mobile menu" aria-label="Toggle menu">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>
-        </svg>
-      </button>
+      <div class="splash-bottom">
+        <div class="splash-bottom-left">
+          <button class="splash-new-session" id="splashNewSession">New Session</button>
+        </div>
+        <div class="splash-bottom-right">
+          <button class="splash-action-btn" id="splashDonate">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            Support Project
+          </button>
+          <button class="splash-action-btn" id="splashContact">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            Contact & Feedback
+          </button>
+          <button class="splash-action-btn" id="splashAbout">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            About CoreLink 3D
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- 1. TOP MENU BAR (HEADER)                                          -->
+  <!-- ================================================================= -->
+  <header class="b-header" id="topHeader">
+    <!-- Left: Logo & Dropdown Menus -->
+    <div class="b-header-left">
+      <!-- CoreLink 3D Brand -->
+      <div class="b-brand" title="CoreLink 3D Studio">
+        <span class="b-brand-name" style="font-weight: 500; font-size: 13px; letter-spacing: 0.5px;">CoreLink 3D</span>
+      </div>
+
+      <!-- Dropdown Menus -->
+      <nav class="b-menu-bar" aria-label="Main Menu">
+        <!-- FILE MENU -->
+        <div class="b-menu-item" id="menuFile">
+          <button type="button" class="b-menu-btn" aria-haspopup="true">File</button>
+          <div class="b-dropdown" role="menu">
+            <button type="button" class="b-dropdown-item" id="menuNewScene">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+              <span class="b-dropdown-label">New Scene</span>
+              <span class="b-dropdown-shortcut">Ctrl+N</span>
+            </button>
+            <div class="b-dropdown-divider"></div>
+            <button type="button" class="b-dropdown-item" id="menuImportFile">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+              <span class="b-dropdown-label">Import Model</span>
+              <span class="b-dropdown-shortcut">Ctrl+O</span>
+            </button>
+            <div class="b-dropdown-submenu-wrap">
+              <button type="button" class="b-dropdown-item has-submenu">
+                <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></span>
+                <span class="b-dropdown-label">Export Scene As...</span>
+                <span class="b-dropdown-arrow">▸</span>
+              </button>
+              <div class="b-submenu">
+                <button type="button" class="b-dropdown-item" data-export="glb">Binary glTF (.glb)</button>
+                <button type="button" class="b-dropdown-item" data-export="gltf">JSON glTF (.gltf)</button>
+                <button type="button" class="b-dropdown-item" data-export="cl3d">CoreLink Project Bundle (.cl3d)</button>
+              </div>
+            </div>
+            <div class="b-dropdown-divider"></div>
+            <button type="button" class="b-dropdown-item" id="menuResetScene">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
+              <span class="b-dropdown-label">Reset Default Workspace</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- EDIT MENU -->
+        <div class="b-menu-item" id="menuEdit">
+          <button type="button" class="b-menu-btn" aria-haspopup="true">Edit</button>
+          <div class="b-dropdown" role="menu">
+            <button type="button" class="b-dropdown-item" id="menuUndo">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13C5.5 6.5 13 4 19 8"/></svg></span>
+              <span class="b-dropdown-label">Undo</span>
+              <span class="b-dropdown-shortcut">Ctrl+Z</span>
+            </button>
+            <button type="button" class="b-dropdown-item" id="menuRedo">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M21 13C18.5 6.5 11 4 5 8"/></svg></span>
+              <span class="b-dropdown-label">Redo</span>
+              <span class="b-dropdown-shortcut">Ctrl+Shift+Z</span>
+            </button>
+            <div class="b-dropdown-divider"></div>
+            <button type="button" class="b-dropdown-item" id="menuDuplicateSelected">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
+              <span class="b-dropdown-label">Duplicate Object</span>
+              <span class="b-dropdown-shortcut">Shift+D</span>
+            </button>
+            <button type="button" class="b-dropdown-item" id="menuDeleteSelected">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+              <span class="b-dropdown-label">Delete Selected</span>
+              <span class="b-dropdown-shortcut">Del / X</span>
+            </button>
+            <div class="b-dropdown-divider"></div>
+            <button type="button" class="b-dropdown-item" id="menuDeselect">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
+              <span class="b-dropdown-label">Deselect All</span>
+              <span class="b-dropdown-shortcut">Esc</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ADD MENU -->
+        <div class="b-menu-item" id="menuAdd">
+          <button type="button" class="b-menu-btn" aria-haspopup="true">Add</button>
+          <div class="b-dropdown" role="menu">
+            <div class="b-dropdown-section-title">Mesh</div>
+            <button type="button" class="b-dropdown-item" data-create="box">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>
+              <span class="b-dropdown-label">Cube</span>
+              <span class="b-dropdown-shortcut">Shift+A</span>
+            </button>
+            <button type="button" class="b-dropdown-item" data-create="sphere">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="9" ry="3.5"/></svg></span>
+              <span class="b-dropdown-label">UV Sphere</span>
+              <span class="b-dropdown-shortcut">Shift+S</span>
+            </button>
+            <button type="button" class="b-dropdown-item" data-create="cylinder">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/></svg></span>
+              <span class="b-dropdown-label">Cylinder</span>
+              <span class="b-dropdown-shortcut">Shift+C</span>
+            </button>
+            <button type="button" class="b-dropdown-item" data-create="capsule">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="18" rx="6"/></svg></span>
+              <span class="b-dropdown-label">Capsule</span>
+              <span class="b-dropdown-shortcut">Shift+K</span>
+            </button>
+            <button type="button" class="b-dropdown-item" data-create="torus">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9" ry="6"/><ellipse cx="12" cy="12" rx="4" ry="2.5"/></svg></span>
+              <span class="b-dropdown-label">Torus</span>
+              <span class="b-dropdown-shortcut">Shift+T</span>
+            </button>
+            <button type="button" class="b-dropdown-item" data-create="plane">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 17 8 7 21 7 16 17"/></svg></span>
+              <span class="b-dropdown-label">Plane</span>
+              <span class="b-dropdown-shortcut">Shift+P</span>
+            </button>
+            <div class="b-dropdown-divider"></div>
+            <div class="b-dropdown-section-title">Light</div>
+            <button type="button" class="b-dropdown-item" data-create="dirLight">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></span>
+              <span class="b-dropdown-label">Sun (Directional)</span>
+              <span class="b-dropdown-shortcut">Shift+L</span>
+            </button>
+            <button type="button" class="b-dropdown-item" data-create="pointLight">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M15 9a3 3 0 1 0-6 0c0 2 2 3 2 5h2c0-2 2-3 2-5z"/></svg></span>
+              <span class="b-dropdown-label">Point Light</span>
+              <span class="b-dropdown-shortcut">Shift+I</span>
+            </button>
+            <button type="button" class="b-dropdown-item" data-create="spotLight">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6l-6-4-6 4v3l6 4 6-4V6z"/><path d="M8 11v8a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-8"/></svg></span>
+              <span class="b-dropdown-label">Spot Light</span>
+              <span class="b-dropdown-shortcut">Shift+O</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- VIEW MENU -->
+        <div class="b-menu-item" id="menuView">
+          <button type="button" class="b-menu-btn" aria-haspopup="true">View</button>
+          <div class="b-dropdown" role="menu">
+            <button type="button" class="b-dropdown-item" id="menuCamOrbit">
+              <span class="b-dropdown-label">Perspective (Orbit)</span>
+              <span class="b-dropdown-shortcut">Num 5</span>
+            </button>
+            <button type="button" class="b-dropdown-item" id="menuCamTop">
+              <span class="b-dropdown-label">Top View</span>
+              <span class="b-dropdown-shortcut">Num 7</span>
+            </button>
+            <button type="button" class="b-dropdown-item" id="menuCamFront">
+              <span class="b-dropdown-label">Front View</span>
+              <span class="b-dropdown-shortcut">Num 1</span>
+            </button>
+            <button type="button" class="b-dropdown-item" id="menuCamFree">
+              <span class="b-dropdown-label">Free Fly Camera</span>
+              <span class="b-dropdown-shortcut">Shift+`</span>
+            </button>
+            <div class="b-dropdown-divider"></div>
+            <button type="button" class="b-dropdown-item" id="menuToggleGrid">
+              <span class="b-dropdown-check" id="checkMenuGrid"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <span class="b-dropdown-label">Show Floor Grid</span>
+              <span class="b-dropdown-shortcut">G</span>
+            </button>
+            <button type="button" class="b-dropdown-item" id="menuToggleStats" aria-pressed="false">
+              <span class="b-dropdown-check" id="checkMenuStats"></span>
+              <span class="b-dropdown-label">Show Performance Stats</span>
+              <span class="b-dropdown-shortcut">Ctrl+F</span>
+            </button>
+            <button type="button" class="b-dropdown-item" id="menuToggleFullscreen">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></span>
+              <span class="b-dropdown-label">Toggle Fullscreen</span>
+              <span class="b-dropdown-shortcut">F11</span>
+            </button>
+            <div class="b-dropdown-divider"></div>
+            <button type="button" class="b-dropdown-item" id="btnToggleInspector">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
+              <span class="b-dropdown-label">Babylon Native Inspector</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- HELP MENU -->
+        <div class="b-menu-item" id="menuHelp">
+          <button type="button" class="b-menu-btn" aria-haspopup="true">Help</button>
+          <div class="b-dropdown" role="menu">
+            <button type="button" class="b-dropdown-item" id="btnMenuShortcuts">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6.01" y2="8"/><line x1="10" y1="8" x2="10.01" y2="8"/><line x1="14" y1="8" x2="14.01" y2="8"/><line x1="18" y1="8" x2="18.01" y2="8"/><line x1="6" y1="12" x2="6.01" y2="12"/><line x1="10" y1="12" x2="10.01" y2="12"/><line x1="14" y1="12" x2="14.01" y2="12"/><line x1="18" y1="12" x2="18.01" y2="12"/><line x1="7" y1="16" x2="17" y2="16"/></svg></span>
+              <span class="b-dropdown-label">Keyboard Shortcuts</span>
+              <span class="b-dropdown-shortcut">F1</span>
+            </button>
+            <a href="https://doc.babylonjs.com" target="_blank" rel="noopener noreferrer" class="b-dropdown-item">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
+              <span class="b-dropdown-label">Babylon.js Documentation ↗</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- MESH MENU -->
+        <div class="b-menu-item" id="menuMesh">
+          <button type="button" class="b-menu-btn" aria-haspopup="true">Mesh</button>
+          <div class="b-dropdown" role="menu">
+            <button type="button" class="b-dropdown-item" id="menuMeshJoin">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+              <span class="b-dropdown-label">Join (Merge Meshes)</span>
+              <span class="b-dropdown-shortcut">Ctrl+J</span>
+            </button>
+            <div class="b-dropdown-divider"></div>
+            <button type="button" class="b-dropdown-item" id="menuMeshFlatShading">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polygon points="2 17 12 22 22 17"/><polygon points="2 12 12 17 22 12"/></svg></span>
+              <span class="b-dropdown-label">Flat Shading</span>
+              <span class="b-dropdown-shortcut">Alt+F2</span>
+            </button>
+            <button type="button" class="b-dropdown-item" id="menuMeshSmoothShading">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12 Q12 7 16 12 Q12 17 8 12"/></svg></span>
+              <span class="b-dropdown-label">Smooth Shading</span>
+              <span class="b-dropdown-shortcut">Alt+F3</span>
+            </button>
+            <button type="button" class="b-dropdown-item" id="menuMeshFlipNormals">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"/><line x1="12" y1="6" x2="12" y2="18"/></svg></span>
+              <span class="b-dropdown-label">Flip Normals</span>
+              <span class="b-dropdown-shortcut">Alt+F</span>
+            </button>
+            <div class="b-dropdown-divider"></div>
+            <button type="button" class="b-dropdown-item" id="menuMeshToggleWireframe">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" stroke-dasharray="3 3"/></svg></span>
+              <span class="b-dropdown-label">Boundaries / Wireframe Toggle</span>
+              <span class="b-dropdown-shortcut">Z</span>
+            </button>
+          </div>
+        </div>
+      </nav>
     </div>
 
-    <div class="header-center">
-      <span class="session-label">SESSION:</span>
-      <span class="session-id" id="sessionId">Initializing...</span>
+    <!-- Center: Viewport Quick Controls -->
+    <div class="b-header-center">
+      <div class="b-mode-pill">Object Mode</div>
+      
+      <div class="b-view-controls">
+        <div class="b-shading-group" id="shadingGroup" title="Viewport Shading">
+          <button type="button" class="b-shading-btn active" data-shading="pbr" title="Solid / PBR Shading">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="9"/></svg>
+          </button>
+        </div>
+      </div>
     </div>
 
-    <div class="header-status">
-      <div class="status-indicator">
-        <span class="status-dot" id="statusDot"></span>
-        <span class="status-label" id="statusLabel">Checking AI...</span>
+    <!-- Right: Telemetry & Actions -->
+    <div class="b-header-right">
+      <div class="b-performance-overlay" id="performanceOverlay" hidden>
+        <div class="b-engine-badge" id="editorEngineBadge" title="3D Engine Acceleration">
+          <span class="b-engine-dot"></span>
+          <span id="engineBadgeText">WebGPU Native</span>
+        </div>
+        <div class="b-stats-pill" title="Realtime Scene Telemetry">
+          <span class="b-stat-item"><strong id="editorFpsCounter">60</strong> FPS</span>
+          <span class="b-stat-sep">|</span>
+          <span class="b-stat-item"><strong id="headerPolyCount">0</strong> Tris</span>
+          <span class="b-stat-sep">|</span>
+          <span class="b-stat-item"><strong id="headerMeshCount">0</strong> Meshes</span>
+        </div>
       </div>
-      <span class="status-model" id="statusModel">Qwen 2.5 Coder 7B</span>
-      <div class="backend-toggle" id="backendToggle" title="Switch AI inference engine">
-        <button class="backend-btn active" data-backend="ollama">OLLAMA</button>
-        <button class="backend-btn" data-backend="vllm">vLLM</button>
-      </div>
+
+      <input id="editorImportInput" type="file" accept=".glb,.gltf,.cl3d" hidden />
     </div>
   </header>
 
-  <!-- ── MOBILE NAVIGATION DRAWER ─────────────────────── -->
-  <div class="mobile-menu-drawer" id="mobileMenuDrawer">
-    <div class="mobile-menu-content">
-      <button type="button" class="mobile-menu-item" id="btnMobileContact">
-        <span class="mobile-menu-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="4" width="20" height="16" rx="2"/>
-            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-          </svg>
-        </span>
-        Contact / Feedback
-      </button>
-      <button type="button" class="mobile-menu-item" id="btnMobileAbout">
-        <span class="mobile-menu-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 16v-4M12 8h.01"/>
-          </svg>
-        </span>
-        About Project
-      </button>
-      <button type="button" class="mobile-menu-item" id="btnMobileDonate">
-        <span class="mobile-menu-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-          </svg>
-        </span>
-        Support Project
-      </button>
-    </div>
-  </div>
+  <!-- ================================================================= -->
+  <!-- 2. MAIN MONOLITHIC WORKSPACE                                      -->
+  <!-- ================================================================= -->
+  <div class="b-workspace" id="app">
 
-  <!-- ── MAIN STUDIO LAYOUT ──────────────────────────────── -->
-  <main class="studio-layout">
+    <!-- LEFT VERTICAL TOOL SHELF -->
+    <aside class="b-toolshelf" id="toolShelf" aria-label="Transform Tools">
+      <button type="button" class="b-tool-btn" data-gizmo="select" title="Box Select [Q]">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7 18 3-7 7-3L3 3z"/></svg>
+      </button>
+      <button type="button" class="b-tool-btn active" data-gizmo="position" title="Translate / Move [W]">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+      </button>
+      <button type="button" class="b-tool-btn" data-gizmo="rotation" title="Rotate [E]">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+      </button>
+      <button type="button" class="b-tool-btn" data-gizmo="scaling" title="Scale [R]">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </button>
+      <button type="button" class="b-tool-btn" data-gizmo="bounds" title="Bounding Box Gizmo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" stroke-dasharray="3 3"/></svg>
+      </button>
+      <div class="b-tool-divider"></div>
+      <button type="button" class="b-tool-btn" id="btnResetMaterialGray" title="Reset to Default Neutral Gray Material (Blender Style)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 2v20M2 12h20"/></svg>
+      </button>
+      <button type="button" class="b-tool-btn" id="editorSnapBtn" title="Toggle Grid Snapping">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4a5 5 0 0 1 10 0v7a5 5 0 0 1-10 0V9"/><path d="M7 4v5h3V4M14 4v5h3"/></svg>
+      </button>
+      <button type="button" class="b-tool-btn" id="btnShelfFocus" title="Focus / Frame Selected Object [F]">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M3 9V5a2 2 0 0 1 2-2h4M15 3h4a2 2 0 0 1 2 2v4M21 15v4a2 2 0 0 1-2 2h-4M9 21H5a2 2 0 0 1-2-2v-4"/></svg>
+      </button>
+    </aside>
 
-    <!-- LEFT PANEL: MATERIAL & LIGHTING CONTROL PANEL -->
-    <aside class="panel panel-left" id="panelLeft">
-      <div class="panel-header">
-        <h2 class="panel-title">MATERIAL & LIGHTING CONTROL PANEL</h2>
+    <!-- CENTER 3D VIEWPORT CANVAS -->
+    <main class="b-viewport-area" id="editorViewportContainer">
+      <!-- Canvas for WebGPU / WebGL2 -->
+      <canvas id="webgpuCanvas" class="b-canvas"></canvas>
+      <div id="selectionBox" class="b-selection-box" style="display:none;"></div>
+
+      <!-- Drag & Drop Overlay Indicator -->
+      <div class="b-dropzone-indicator" id="viewportDropzone">
+        <div class="b-dropzone-box">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          <div class="b-drop-title">Drop 3D Model or Environment</div>
+          <div class="b-drop-sub">Supported formats: .GLB, .GLTF, .CL3D</div>
+        </div>
       </div>
 
-      <div class="panel-content">
+      <!-- Viewport Loading Spinner with Babylon.js Logo -->
+      <div class="b-viewport-loader" id="editorLoader">
+        <div class="b-loader-babylon-logo" aria-hidden="true">
+          <!-- Babylon.js Official Flame Logo (orange) -->
+          <svg width="52" height="52" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M256 32 L480 176 L480 336 L256 480 L32 336 L32 176 Z" fill="#E8681A" opacity="0.15"/>
+            <path d="M256 64 L448 192 L448 320 L256 448 L64 320 L64 192 Z" fill="none" stroke="#E8681A" stroke-width="8" opacity="0.4"/>
+            <path d="M256 80
+              C256 80 320 140 340 200
+              C360 260 330 290 310 300
+              C330 270 320 240 300 220
+              C300 260 280 280 256 300
+              C232 280 212 260 212 220
+              C192 240 182 270 202 300
+              C182 290 152 260 172 200
+              C192 140 256 80 256 80Z"
+              fill="#E8681A"/>
+            <path d="M256 200
+              C256 200 290 230 295 260
+              C300 285 285 300 270 305
+              C280 290 278 275 265 265
+              C265 282 258 292 256 300
+              C254 292 247 282 247 265
+              C234 275 232 290 242 305
+              C227 300 212 285 217 260
+              C222 230 256 200 256 200Z"
+              fill="#FF8C42"/>
+            <circle cx="256" cy="270" r="18" fill="#FFB347" opacity="0.9"/>
+          </svg>
+        </div>
+        <div class="b-loader-spinner"></div>
+        <div class="b-loader-text" id="editorLoaderText">Initializing 3D Studio...</div>
+      </div>
+    </main>
+
+    <!-- RIGHT SIDEBAR (SCENE OUTLINER & PROPERTIES) -->
+    <aside class="b-sidebar" id="rightSidebar">
+
+      <!-- SECTION 1: SCENE OUTLINER (HIERARCHY TREE) -->
+      <section class="b-outliner-panel" id="outlinerSection">
+        <div class="b-panel-header">
+          <div class="b-panel-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+            <span>Scene Collection</span>
+          </div>
+          <span class="b-node-badge" id="editorGraphCount">0 nodes</span>
+        </div>
+
+        <div class="b-search-row">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="editorGraphSearch" class="b-search-input" placeholder="Search collection..." autocomplete="off" />
+        </div>
+
+        <div class="b-tree-container" id="editorSceneTree">
+          <!-- Populated dynamically -->
+        </div>
+      </section>
+
+      <!-- RESIZABLE SPLITTER DIVIDER -->
+      <div class="b-splitter"></div>
+
+      <!-- SECTION 2: MONOLITHIC PROPERTIES PANEL WITH TABS -->
+      <section class="b-properties-panel" id="propertiesSection">
         
-        <!-- CARD 1: MATERIAL EDITOR -->
-        <section class="card collapsible" id="cardMaterial">
-          <div class="card-header">
-            <span class="card-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="1"/><circle cx="19" cy="3" r="1"/><circle cx="21" cy="9" r="1"/>
-                <path d="M3 3h2c.1 0 .2 0 .3.1l18 9c.2.1.2.3 0 .4l-18 9c-.2.1-.2.1-.3.1H3c-.6 0-1-.4-1-1V4c0-.6.4-1 1-1z"/>
-              </svg>
-            </span>
-            <h3 class="card-title">Material Editor</h3>
-            <span class="card-chevron">▼</span>
-          </div>
-          <div class="card-body">
-            <div class="form-group inline-row">
-              <label class="form-label" for="meshSelect">Target</label>
-              <select class="select-field" id="meshSelect">
-                <option value="all">Entire Model (All Meshes)</option>
-              </select>
+        <!-- Category Tab Bar -->
+        <div class="b-prop-tabs" id="propTabBar" role="tablist">
+          <button type="button" class="b-prop-tab active" data-tab="transform" title="Object & Transforms" role="tab">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>
+            <span>Object</span>
+          </button>
+          <button type="button" class="b-prop-tab" data-tab="material" title="Material Editor (PBR)" role="tab">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18v-18z"/></svg>
+            <span>Material</span>
+          </button>
+        </div>
+
+        <!-- Scrollable Properties Body -->
+        <div class="b-prop-body" id="propBody">
+
+          <!-- TAB 1: OBJECT & TRANSFORMS -->
+          <div class="b-tab-pane active" id="paneTransform">
+            <!-- Empty state when no selection -->
+            <div class="b-empty-hint" id="inspectorEmptyState">
+              <span>Select an object in the viewport or outliner to view transforms.</span>
             </div>
 
-            <div class="form-group inline-row">
-              <label class="form-label">Base Color</label>
-              <div class="color-picker-wrapper">
-                <input type="color" class="color-input" id="baseColorInput" value="#ffffff" aria-label="Choose Color" />
-                <span class="color-action-label">Choose Color</span>
-                <input type="text" class="text-input color-hex-text" id="baseColorHex" value="#ffffff" maxLength="7" />
-              </div>
-            </div>
-
-            <div class="form-group slider-row">
-              <label class="form-label" for="metallicRange">Metallic</label>
-              <input type="range" class="range-slider" id="metallicRange" min="0" max="1" step="0.01" value="0.9" />
-              <span class="val-display" id="metallicVal">0.90</span>
-            </div>
-
-            <div class="form-group slider-row">
-              <label class="form-label" for="roughnessRange">Roughness</label>
-              <input type="range" class="range-slider" id="roughnessRange" min="0" max="1" step="0.01" value="0.2" />
-              <span class="val-display" id="roughnessVal">0.20</span>
-            </div>
-
-            <div class="form-group slider-row">
-              <label class="form-label" for="normalScaleRange">Normal</label>
-              <input type="range" class="range-slider" id="normalScaleRange" min="0" max="3" step="0.05" value="1.0" />
-              <span class="val-display" id="normalScaleVal">1.00</span>
-            </div>
-
-            <div class="form-group slider-row emissive-row">
-              <label class="form-label">Emissive</label>
-              <div class="emissive-color-line">
-                <input type="color" class="color-input" id="emissiveColorInput" value="#00f2fe" aria-label="Choose Color" />
-                <span class="color-action-label">Choose Color</span>
-              </div>
-              <div class="emissive-value-line">
-                <input type="range" class="range-slider" id="emissiveIntensityRange" min="0" max="5" step="0.1" value="0" />
-                <input type="text" class="text-input color-hex-text" id="emissiveColorHex" value="#00f2fe" maxLength="7" aria-label="Emissive color HEX" />
-                <span class="val-display" id="emissiveVal">0.00</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- CARD 2: SHADER SETTINGS -->
-        <section class="card collapsible" id="cardShader">
-          <div class="card-header">
-            <span class="card-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-              </svg>
-            </span>
-            <h3 class="card-title">Shader Settings</h3>
-            <span class="card-chevron">▼</span>
-          </div>
-          <div class="card-body">
-            <div class="button-group">
-              <button class="btn-toggle active" id="btnShaderPbr">PBR Standard</button>
-              <button class="btn-toggle" id="btnShaderCustom">Sci-Fi Overlay</button>
-            </div>
-          </div>
-        </section>
-
-        <!-- CARD 3: LIGHT & ENVIRONMENT EDITOR -->
-        <section class="card collapsible" id="cardLight">
-          <div class="card-header">
-            <span class="card-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M15 21H9v-2h6v2zM17.8 19c1.1-1.7 1.2-3.8 0-5.8-2.4-4.1-8.4-4.1-10.8 0-1.2 2-1 4.1 0 5.8m-11.6 0H2v2h4v-2z"/>
-                <path d="M12 2v5m5.63 1.37L20.49 5.5M5.51 5.5 2.37 8.37M18 12h5m-18 0H1M17 20.29l3.13 3.13M4 20.29.87 23.42"/>
-              </svg>
-            </span>
-            <h3 class="card-title">Light & Environment</h3>
-            <span class="card-chevron">▼</span>
-          </div>
-          <div class="card-body">
-            <div class="form-group">
-              <label class="form-label">Presets</label>
-              <div class="preset-grid">
-                <button class="preset-btn active" data-preset="studio">Studio</button>
-                <button class="preset-btn" data-preset="sunset">Sunset</button>
-                <button class="preset-btn" data-preset="cyberpunk">Cyberpunk</button>
-                <button class="preset-btn" data-preset="night">Night</button>
-              </div>
-            </div>
-
-            <div class="form-group slider-row">
-              <label class="form-label" for="ambientIntensity">Ambient</label>
-              <input type="range" class="range-slider" id="ambientIntensity" min="0" max="2" step="0.05" value="0.6" />
-              <span class="val-display" id="ambientIntensityVal">0.60</span>
-            </div>
-
-            <div class="form-group light-controls">
-              <label class="form-label">Light Sources</label>
-              <div class="light-control-row"><label for="keyLightEnabled">Key Light</label><input type="checkbox" id="keyLightEnabled" checked /><input type="text" class="light-color-input" id="keyLightColor" value="#FFFFFF" maxlength="7" aria-label="Key light color" /><input type="range" id="keyLightIntensityControl" min="0" max="5" step="0.05" value="1.5" /><span id="keyLightIntensityControlVal">1.50</span></div>
-              <div class="light-control-row"><label for="fillLightEnabled">Fill Light</label><input type="checkbox" id="fillLightEnabled" checked /><input type="text" class="light-color-input" id="fillLightColor" value="#4FACFE" maxlength="7" aria-label="Fill light color" /><input type="range" id="fillLightIntensity" min="0" max="5" step="0.05" value="0.4" /><span id="fillLightIntensityVal">0.40</span></div>
-              <div class="light-control-row"><label for="rimLightEnabled">Rim Light</label><input type="checkbox" id="rimLightEnabled" checked /><input type="text" class="light-color-input" id="rimLightColor" value="#00F2FE" maxlength="7" aria-label="Rim light color" /><input type="range" id="rimLightIntensity" min="0" max="5" step="0.05" value="0.6" /><span id="rimLightIntensityVal">0.60</span></div>
-            </div>
-
-            <div class="form-group slider-row">
-              <label class="form-label" for="exposureControl">Exposure</label>
-              <input type="range" class="range-slider" id="exposureControl" min="0.25" max="3" step="0.05" value="1.1" />
-              <span class="val-display" id="exposureControlVal">1.10</span>
-            </div>
-
-            <div class="form-group environment-controls">
-              <label class="form-label" for="environmentFile">Custom Environment</label>
-              <div class="environment-file-picker"><input type="file" id="environmentFile" accept=".hdr,.exr,image/vnd.radiance,image/x-exr" hidden /><label class="choose-file-button" for="environmentFile">Choose File</label><span id="environmentFileName">No file selected</span></div>
-              <span class="environment-file-hint">Choose a 360-degree equirectangular environment map in HDR or EXR format.</span>
-              <div class="slider-row"><label class="form-label" for="environmentIntensity">Reflections</label><input type="range" class="range-slider" id="environmentIntensity" min="0" max="3" step="0.05" value="1" /><span class="val-display" id="environmentIntensityVal">1.00</span></div>
-              <div class="slider-row"><label class="form-label" for="backgroundIntensity">Background</label><input type="range" class="range-slider" id="backgroundIntensity" min="0" max="3" step="0.05" value="1" /><span class="val-display" id="backgroundIntensityVal">1.00</span></div>
-              <div class="slider-row"><label class="form-label" for="backgroundBlur">Background Blur</label><input type="range" class="range-slider" id="backgroundBlur" min="0" max="1" step="0.05" value="0" /><span class="val-display" id="backgroundBlurVal">0.00</span></div>
-              <div class="slider-row"><label class="form-label" for="skyboxRotation">Skybox Rotation</label><input type="range" class="range-slider" id="skyboxRotation" min="-3.14" max="3.14" step="0.05" value="0" /><span class="val-display" id="skyboxRotationVal">0.00</span></div>
-            </div>
-
-            <div class="form-group shader-effects">
-              <label class="form-label">Shader Effects</label>
-              <div class="toggle-row"><span>Wireframe Overlay</span><label class="switch"><input type="checkbox" id="wireframeOverlayToggle" /><span class="slider round"></span></label></div>
-              <div class="toggle-row"><span>Sci-Fi Grid Floor</span><label class="switch"><input type="checkbox" id="gridFloorToggle" checked /><span class="slider round"></span></label></div>
-              <div class="toggle-row"><span>Hologram Effect</span><label class="switch"><input type="checkbox" id="hologramToggle" /><span class="slider round"></span></label></div>
-            </div>
-
-            <div class="form-group toggle-row">
-              <span class="form-label">Cast Shadows</span>
-              <label class="switch">
-                <input type="checkbox" id="shadowToggle" checked />
-                <span class="slider round"></span>
-              </label>
-            </div>
-          </div>
-        </section>
-
-        <!-- CARD 4: ASSET LIBRARY & EXPORT -->
-        <section class="card collapsible flex-grow-card" id="cardUpload">
-          <div class="card-header">
-            <span class="card-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8c0-1-1-2-2-2H5c-1 0-2 1-2 2v8c0 1 1 2 2 2h14c1 0 2-1 2-2z"/>
-                <path d="M3.27 6.96A2.85 2.85 0 0 1 5 6h14a2.9 2.9 0 0 1 1.73.96M3.27 17.04A2.85 2.85 0 0 0 5 18h14a2.9 2.9 0 0 0 1.73-.96"/>
-              </svg>
-            </span>
-            <h3 class="card-title">Asset Library & Export</h3>
-            <span class="card-chevron">▼</span>
-          </div>
-          <div class="card-body card-body-flex">
-            <div class="upload-dropzone" id="uploadZone">
-              <input type="file" id="fileInput" accept=".glb,.gltf,.obj,.fbx" hidden />
-              <div class="dropzone-content">
-                <div class="upload-icon">📁</div>
-                <div class="upload-text">Drop .GLB / .GLTF here</div>
-                <div class="upload-sub">or click to browse files</div>
-              </div>
-            </div>
-            <div class="upload-status" id="uploadStatus">Ready for 3D model</div>
-            <div class="asset-toolbar">
-              <button type="button" class="btn-trash-open" id="btnOpenTrash" title="Recycle Bin">
-                <span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
-                  </svg>
-                </span>
-                Recycle Bin <span class="trash-count" id="trashCount">0</span>
-              </button>
-            </div>
-            <ul class="file-list" id="fileList">
-              <li class="file-list-empty">No models loaded</li>
-            </ul>
-
-            <!-- DEDICATED MODEL EXPORT SECTION -->
-            <div class="export-section" id="exportSection">
-              <div class="export-header">
-                <span class="export-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
-                  </svg>
-                </span>
-                <span class="export-title">Export / Download Processed Model</span>
-              </div>
-              <p class="export-desc">
-                Save active 3D scene with modified PBR materials, colors, light settings, and scene transforms using Three.js GLTFExporter.
-              </p>
-              <div class="export-form-row">
-                <div class="export-field">
-                  <label for="exportFormatSelect" class="form-label">Format</label>
-                  <select id="exportFormatSelect" class="select-field">
-                    <option value="glb">Binary GLTF (.glb)</option>
-                    <option value="gltf">JSON GLTF (.gltf)</option>
-                  </select>
+            <!-- Active Object Content -->
+            <div id="inspectorContent" style="display:none;">
+              <!-- Accordion: Identity -->
+              <details class="b-accordion" open>
+                <summary class="b-acc-summary">
+                  <span class="b-acc-arrow">▾</span>
+                  <span class="b-acc-title">Object Identity</span>
+                </summary>
+                <div class="b-acc-body">
+                  <div class="b-field-row">
+                    <label for="inspNodeName" class="b-label">Name</label>
+                    <input type="text" id="inspNodeName" class="b-input text" />
+                  </div>
                 </div>
-                <button class="btn-export-primary" id="btnPanelExportGlb">
-                  <span class="btn-icon">📥</span>
-                  <span>Export Model</span>
-                </button>
-              </div>
+              </details>
+
+              <!-- Accordion: Transform Vectors -->
+              <details class="b-accordion" open>
+                <summary class="b-acc-summary">
+                  <span class="b-acc-arrow">▾</span>
+                  <span class="b-acc-title">Transform</span>
+                </summary>
+                <div class="b-acc-body">
+                  <!-- Location -->
+                  <div class="b-vector-group">
+                    <div class="b-vector-title">Location</div>
+                    <div class="b-axis-grid">
+                      <div class="b-axis-field">
+                        <span class="b-axis-tag x">X</span>
+                        <input type="number" id="inspPosX" step="0.1" value="0.00" class="b-input num" />
+                      </div>
+                      <div class="b-axis-field">
+                        <span class="b-axis-tag y">Y</span>
+                        <input type="number" id="inspPosY" step="0.1" value="0.00" class="b-input num" />
+                      </div>
+                      <div class="b-axis-field">
+                        <span class="b-axis-tag z">Z</span>
+                        <input type="number" id="inspPosZ" step="0.1" value="0.00" class="b-input num" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Rotation -->
+                  <div class="b-vector-group">
+                    <div class="b-vector-title">Rotation (Deg)</div>
+                    <div class="b-axis-grid">
+                      <div class="b-axis-field">
+                        <span class="b-axis-tag x">X</span>
+                        <input type="number" id="inspRotX" step="1" value="0" class="b-input num" />
+                      </div>
+                      <div class="b-axis-field">
+                        <span class="b-axis-tag y">Y</span>
+                        <input type="number" id="inspRotY" step="1" value="0" class="b-input num" />
+                      </div>
+                      <div class="b-axis-field">
+                        <span class="b-axis-tag z">Z</span>
+                        <input type="number" id="inspRotZ" step="1" value="0" class="b-input num" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Scale -->
+                  <div class="b-vector-group">
+                    <div class="b-vector-title">Scale</div>
+                    <div class="b-axis-grid">
+                      <div class="b-axis-field">
+                        <span class="b-axis-tag x">X</span>
+                        <input type="number" id="inspScaleX" step="0.1" value="1.00" class="b-input num" />
+                      </div>
+                      <div class="b-axis-field">
+                        <span class="b-axis-tag y">Y</span>
+                        <input type="number" id="inspScaleY" step="0.1" value="1.00" class="b-input num" />
+                      </div>
+                      <div class="b-axis-field">
+                        <span class="b-axis-tag z">Z</span>
+                        <input type="number" id="inspScaleZ" step="0.1" value="1.00" class="b-input num" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </details>
             </div>
-
           </div>
-        </section>
 
-      </div>
+          <!-- TAB 2: MATERIAL PROPERTIES (PBR) -->
+          <div class="b-tab-pane" id="paneMaterial">
+            <details class="b-accordion" open>
+              <summary class="b-acc-summary">
+                <span class="b-acc-arrow">▾</span>
+                <span class="b-acc-title">Surface (PBR Principled)</span>
+              </summary>
+              <div class="b-acc-body">
+                <div class="b-field-row">
+                  <label for="inspMatName" class="b-label">Material</label>
+                  <input type="text" id="inspMatName" class="b-input text" readonly placeholder="Default Material" />
+                </div>
+
+                <!-- Base Color -->
+                <div class="b-field-row">
+                  <label for="inspMatColor" class="b-label">Base Color</label>
+                  <div class="b-color-row">
+                    <input type="color" id="inspMatColor" value="#cccccc" class="b-color-picker" />
+                    <input type="text" id="inspMatColorHex" value="#cccccc" maxlength="7" class="b-input hex" />
+                  </div>
+                </div>
+
+                <!-- Roughness -->
+                <div class="b-slider-row">
+                  <div class="b-slider-header">
+                    <label for="inspRoughness" class="b-label">Roughness</label>
+                    <span class="b-slider-val" id="inspRoughnessVal">0.40</span>
+                  </div>
+                  <input type="range" id="inspRoughness" min="0" max="1" step="0.01" value="0.4" class="b-slider" />
+                </div>
+
+                <!-- Metallic -->
+                <div class="b-slider-row">
+                  <div class="b-slider-header">
+                    <label for="inspMetallic" class="b-label">Metallic</label>
+                    <span class="b-slider-val" id="inspMetallicVal">0.00</span>
+                  </div>
+                  <input type="range" id="inspMetallic" min="0" max="1" step="0.01" value="0.0" class="b-slider" />
+                </div>
+
+                <!-- Alpha / Opacity -->
+                <div class="b-slider-row">
+                  <div class="b-slider-header">
+                    <label for="inspAlpha" class="b-label">Alpha / Opacity</label>
+                    <span class="b-slider-val" id="inspAlphaVal">1.00</span>
+                  </div>
+                  <input type="range" id="inspAlpha" min="0" max="1" step="0.01" value="1.0" class="b-slider" />
+                </div>
+
+                <!-- Emissive -->
+                <div class="b-field-row">
+                  <label for="inspEmissiveColor" class="b-label">Emissive Color</label>
+                  <div class="b-color-row">
+                    <input type="color" id="inspEmissiveColor" value="#000000" class="b-color-picker" />
+                    <input type="text" id="inspEmissiveColorHex" value="#000000" maxlength="7" class="b-input hex" />
+                  </div>
+                </div>
+
+                <!-- Toggles -->
+                <div class="b-checkbox-row">
+                  <label class="b-check-label"><input type="checkbox" id="inspWireframe" /> Wireframe</label>
+                </div>
+              </div>
+            </details>
+          </div>
+
+        </div>
+      </section>
+
     </aside>
 
-    <!-- CENTER CANVAS: THREE.JS RENDERING ENGINE -->
-    <div class="canvas-container" id="canvasContainer">
-      
-      <!-- VIEWPORT TOOLBAR HEADER -->
-      <div class="viewport-header" id="viewportHeader">
-        <div class="window-controls">
-          <button class="dot red" id="btnWinClose" title="Close / Toggle UI Controls Overlay" aria-label="Close UI Controls"></button>
-          <button class="dot yellow" id="btnWinMinimize" title="Minimize / Reset Camera Focus" aria-label="Reset Camera Focus"></button>
-          <button class="dot green" id="btnWinFullscreen" title="Toggle Fullscreen Viewport Mode" aria-label="Toggle Fullscreen"></button>
-          <span class="viewport-title">3D Canvas — Three.js Engine</span>
-        </div>
-        <div class="viewport-quick-tools" id="viewportQuickTools">
-          <button class="tool-btn" id="btnResetCamera" title="Reset Camera View">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
-            </svg>
-            Reset Cam
-          </button>
-          <button class="tool-btn" id="btnToggleWireframe" title="Toggle Wireframe Mesh">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 12h18M12 3v18M6 6l12 12M18 6L6 18"/>
-            </svg>
-            Wireframe
-          </button>
-          <button class="tool-btn" id="btnToggleGrid" title="Toggle Floor Grid">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20 10 10 0 0 1 0-20"/><path d="M2 12h20M12 2v20"/>
-            </svg>
-            Grid
-          </button>
-          <button class="tool-btn" id="btnToggleAutoRotate" title="Toggle Auto Rotation">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36M20.49 15a9 9 0 0 1-14.85 3.36"/>
-            </svg>
-            Rotate
-          </button>
-          <button class="tool-btn" id="btnToggleOrbitLight" title="Toggle Orbiting Light">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="8"/><circle cx="12" cy="4" r="2"/><path d="M12 12L12 2"/>
-            </svg>
-            Light Orbit
-          </button>
-        </div>
-      </div>
+  </div>
 
-      <!-- CANVAS -->
-      <canvas id="viewport3d"></canvas>
-
-      <!-- CANVAS DROP OVERLAY -->
-      <div class="canvas-drop-overlay" id="canvasDropOverlay">
-        <div class="drop-message">
-          <span class="drop-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-              <path d="M12 2L15.09 8.26H22L17.55 12.5L19.64 18.76L12 14.5L4.36 18.76L6.45 12.5L2 8.26H8.91L12 2Z"/>
-            </svg>
-          </span>
-          <span class="drop-main">Drop .GLB model to load</span>
-        </div>
-      </div>
-
-      <!-- HUD STATS OVERLAY -->
-      <div class="viewport-hud">
-        <div class="hud-badge"><span class="hud-label">POLYS:</span> <span class="hud-val" id="hudPolyCount">0</span></div>
-        <div class="hud-badge"><span class="hud-label">MESHES:</span> <span class="hud-val" id="hudMeshCount">0</span></div>
-        <div class="hud-badge"><span class="hud-label">FPS:</span> <span class="hud-val" id="hudFps">60</span></div>
-        <div class="hud-badge accent"><span class="hud-label">ENGINE:</span> <span class="hud-val">WebGL 2.0</span></div>
-      </div>
-
+  <!-- ================================================================= -->
+  <!-- 3. BOTTOM STATUS BAR (KEYMAP & TELEMETRY)                         -->
+  <!-- ================================================================= -->
+  <footer class="b-statusbar">
+    <div class="b-status-right">
+      <span>CoreLink 3D v1.1.0</span>
     </div>
+  </footer>
 
-    <!-- RIGHT PANEL: 3D INSPECTOR & AI ASSISTANT -->
-    <aside class="panel panel-right" id="panelRight">
-      
-      <!-- TOP SECTION: 3D INSPECTOR / ANALYTICS -->
-      <section class="inspector-section">
-        <div class="panel-header">
-          <h2 class="panel-title">3D INSPECTOR / ANALYTICS</h2>
-        </div>
+  <!-- ================================================================= -->
+  <!-- 4. MODALS                                                         -->
+  <!-- ================================================================= -->
 
-        <div class="inspector-content">
-          <div class="card">
-            <div class="card-header">
-              <span class="card-icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                </svg>
-              </span>
-              <h3 class="card-title">GLB Scene Overview</h3>
-            </div>
-            <div class="card-body">
-              <div class="stats-grid">
-                <div class="stat-box">
-                  <span class="stat-label">Model Name</span>
-                  <span class="stat-val" id="infoModelName">SciFi Core</span>
-                </div>
-                <div class="stat-box">
-                  <span class="stat-label">Polycount</span>
-                  <span class="stat-val" id="infoPolyCount">0 Tris / 0 Verts</span>
-                </div>
-                <div class="stat-box">
-                  <span class="stat-label">Draw Calls</span>
-                  <span class="stat-val" id="infoDrawCalls">1</span>
-                </div>
-                <div class="stat-box">
-                  <span class="stat-label">Dimensions</span>
-                  <span class="stat-val" id="infoDimensions">—</span>
-                </div>
-              </div>
-
-              <div class="inspector-tree-container">
-                <div class="tree-header">
-                  <span class="tree-title">Mesh Node Hierarchy</span>
-                  <span class="tree-badge" id="meshCountBadge">0 Nodes</span>
-                </div>
-                <div class="mesh-tree-list" id="meshTreeList">
-                  <div class="tree-empty">No active meshes</div>
-                </div>
-              </div>
-
-              <div class="textures-list-container">
-                <div class="tree-header">
-                  <span class="tree-title">Extracted Textures & Maps</span>
-                </div>
-                <div class="textures-list" id="texturesList">
-                  <div class="texture-item"><span class="tex-type">Diffuse</span><span class="tex-info">Standard Material PBR</span></div>
-                  <div class="texture-item"><span class="tex-type">Normal</span><span class="tex-info">Generated Detail Map</span></div>
-                  <div class="texture-item"><span class="tex-type">Roughness</span><span class="tex-info">Channel 0 Map</span></div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- BOTTOM SECTION: AI ASSISTANT COMMAND WINDOW -->
-      <section class="ai-section">
-        <div class="panel-header">
-          <h2 class="panel-title">AI ASSISTANT COMMAND WINDOW</h2>
-        </div>
-
-        <div class="ai-content">
-          
-          <div class="ai-input-box">
-            <div class="ai-input-header">
-              <span class="ai-label">Interactive Natural Language Input</span>
-              <span class="ai-status-badge" id="aiStatusBadge">READY</span>
-            </div>
-            <textarea
-              class="ai-textarea"
-              id="aiInputPrompt"
-              placeholder="Enter 3D command (e.g. 'Make car matte dark blue with metallic reflections')"
-              rows="2"
-            ></textarea>
-            
-            <div class="ai-submit-row">
-              <button class="btn-ai-submit" id="btnSendAiCommand">
-                <span>RUN AI COMMAND</span>
-                <span class="btn-arrow">→</span>
-              </button>
-            </div>
-
-            <div class="suggestion-chips" id="suggestionChips">
-              <button class="chip-btn" data-prompt="Change material color to metallic cyan #00f2fe with 0.1 roughness">Cyan Metallic</button>
-              <button class="chip-btn" data-prompt="Switch lighting environment to Cyberpunk preset with wireframe enabled">Cyberpunk Wireframe</button>
-              <button class="chip-btn" data-prompt="Make model matte dark red with sunset environment">Sunset Dark Red</button>
-              <button class="chip-btn" data-prompt="Reset camera view and enable studio environment">Reset Studio</button>
-            </div>
-          </div>
-
-          <div class="ai-output-box">
-            <div class="output-header">
-              <span class="output-title">CONVERTED JSON CONTROL COMMANDS</span>
-              <span class="output-sub">Qwen 2.5 Coder 7B Interpreter</span>
-            </div>
-            <pre class="json-code-block"><code id="jsonOutput">{
-  "status": "awaiting_command",
-  "instructions": "Enter prompt above to generate JSON actions"
-}</code></pre>
-            <div class="execution-footer" id="executionFooter">
-              <span class="exec-dot green"></span>
-              <span class="exec-text" id="execStatusText">Awaiting input</span>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-    </aside>
-
-  </main>
-
-  <!-- ── DONATION MODAL (USDC / Base) ─────────────────────── -->
-  <div class="modal-overlay" id="donateModal" role="dialog" aria-labelledby="donateModalTitle">
-    <div class="modal-box donate-modal" onclick="event.stopPropagation()">
-      <div class="modal-header">
-        <h3 id="donateModalTitle">Support CoreLink 3D</h3>
-        <button type="button" class="modal-close" id="donateModalClose" aria-label="Close">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
+  <!-- DONATION MODAL (USDC ON BASE) -->
+  <div class="b-modal-overlay" id="donateModal" role="dialog" aria-labelledby="donateModalTitle">
+    <div class="b-modal-card">
+      <div class="b-modal-header">
+        <h3 id="donateModalTitle" class="b-modal-title">Support CoreLink 3D</h3>
+        <button type="button" class="b-modal-close" id="donateModalClose" aria-label="Close">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-      <div class="modal-body">
-        <p class="donate-warning">
-          <strong>Notice:</strong> Please ensure you send funds strictly via <strong>USDC or ETH on the Base Network</strong>.
+      <div class="b-modal-body">
+        <p class="b-modal-desc">
+          CoreLink 3D is a standalone 3D workspace. Support project development directly via <strong>USDC or ETH on the Base Network</strong>.
         </p>
-        <div class="direct-payment-card">
-          <div class="direct-payment-network">
-            <span class="network-dot"></span>
-            <span>Base Network</span>
-            <span class="network-token">USDC / ETH / ERC-20</span>
+        <div class="b-direct-pay-box">
+          <div class="b-network-tag">
+            <span class="b-net-dot"></span>
+            <span>Base Network (USDC / ETH)</span>
           </div>
-          <div class="direct-payment-content">
-            <div class="direct-payment-address-group">
-              <span class="form-label">Recipient wallet address</span>
-              <div class="direct-payment-address-row">
+          <div class="b-pay-content">
+            <div class="b-address-group">
+              <span class="b-label">Recipient Wallet Address</span>
+              <div class="b-address-field">
                 <code id="donateRecipientAddress">0x3c93728119510665AA6d916Fd95e92330D7d0850</code>
-                <button type="button" class="btn-copy-address" id="btnCopyDonateAddress" aria-label="Copy recipient wallet address">Copy Address</button>
+                <button type="button" class="b-btn small" id="btnCopyDonateAddress">Copy</button>
               </div>
-              <span class="copy-feedback" id="donateCopyFeedback" role="status" aria-live="polite"></span>
+              <span class="b-feedback-text" id="donateCopyFeedback"></span>
             </div>
-            <div class="donate-qr-wrap">
-              <img id="donateQrCode" alt="QR code for the CoreLink 3D recipient wallet address" width="144" height="144" />
-              <span>Scan to pay</span>
+            <div class="b-qr-wrap">
+              <img id="donateQrCode" alt="Base Wallet QR Code" width="128" height="128" />
+              <span class="b-qr-caption">Scan to pay</span>
             </div>
           </div>
         </div>
-        <p class="donate-network-note">Send directly from your wallet. No wallet connection or approval is required by CoreLink 3D.</p>
       </div>
     </div>
   </div>
 
-  <!-- ── RECYCLE BIN MODAL ─────────────────────────────────── -->
-  <div class="modal-overlay" id="trashModal" role="dialog" aria-labelledby="trashModalTitle">
-    <div class="modal-box trash-modal" onclick="event.stopPropagation()">
-      <div class="modal-header">
-        <h3 id="trashModalTitle">Recycle Bin / Trash</h3>
-        <button type="button" class="modal-close" id="trashModalClose" aria-label="Close">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
+  <!-- CONTACT & FEEDBACK MODAL -->
+  <div class="b-modal-overlay" id="contactModal" role="dialog" aria-labelledby="contactModalTitle">
+    <div class="b-modal-card">
+      <div class="b-modal-header">
+        <h3 id="contactModalTitle" class="b-modal-title">Contact & Feedback</h3>
+        <button type="button" class="b-modal-close" id="contactModalClose" aria-label="Close">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-      <div class="modal-body">
-        <p class="trash-desc">Deleted assets are kept here until you restore or permanently remove them.</p>
-        <ul class="trash-list" id="trashList">
-          <li class="trash-empty">Trash is empty</li>
-        </ul>
-        <button type="button" class="btn-danger-outline" id="btnEmptyTrash" style="margin-top:12px;">Empty Trash Permanently</button>
+      <div class="b-modal-body">
+        <p class="b-modal-desc">For inquiries, suggestions, and feedback:</p>
+        <div class="b-contact-box">
+          <span class="b-label">Email Address</span>
+          <div class="b-address-field">
+            <a href="mailto:corelink3d@outlook.com" class="b-email-link">corelink3d@outlook.com</a>
+            <button type="button" class="b-btn small" id="btnCopyContactEmail">Copy Email</button>
+          </div>
+          <span class="b-feedback-text" id="contactCopyFeedback"></span>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ── CONTACT & FEEDBACK MODAL ─────────────────────────── -->
-  <div class="modal-overlay" id="contactModal" role="dialog" aria-labelledby="contactModalTitle">
-    <div class="modal-box contact-modal" onclick="event.stopPropagation()">
-      <div class="modal-header">
-        <h3 id="contactModalTitle">Contact & Feedback</h3>
-        <button type="button" class="modal-close" id="contactModalClose" aria-label="Close">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
+  <!-- ABOUT PROJECT MODAL -->
+  <div class="b-modal-overlay" id="aboutModal" role="dialog" aria-labelledby="aboutModalTitle">
+    <div class="b-modal-card">
+      <div class="b-modal-header">
+        <h3 id="aboutModalTitle" class="b-modal-title">About CoreLink 3D</h3>
+        <button type="button" class="b-modal-close" id="aboutModalClose" aria-label="Close">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-      <div class="modal-body">
-        <p class="contact-description">
-          For suggestions, feedback, feature requests, advertising, and business inquiries, feel free to reach out:
+      <div class="b-modal-body">
+        <p class="b-modal-desc">
+          <strong>CoreLink 3D</strong> is a modern, high-performance browser-based 3D workspace and scene editor powered by <strong>Babylon.js (WebGPU native with WebGL2 fallback)</strong>.
         </p>
-        <div class="contact-card">
-          <div class="email-section">
-            <span class="email-label">Email Address</span>
-            <div class="email-row">
-              <a href="mailto:ruslankiriushenko@gmail.com" class="email-link" id="contactEmailLink">ruslankiriushenko@gmail.com</a>
-              <button type="button" class="btn-copy-email" id="btnCopyContactEmail" aria-label="Copy email address">Copy Email</button>
-            </div>
-            <span class="copy-feedback" id="contactCopyFeedback" role="status" aria-live="polite"></span>
-          </div>
+        <div class="b-feature-list">
+          <div class="b-feature-item"><strong>Monolithic 3D Workspace:</strong> Clean dark graphite environment with interactive gizmos (Q/W/E/R) and hierarchical scene outliner.</div>
+          <div class="b-feature-item"><strong>PBR Principled Material Editor:</strong> Full real-time control over Roughness, Metallic, Normal, Emissive, and Alpha properties.</div>
+          <div class="b-feature-item"><strong>Lighting & Environment:</strong> Adjustable scene color, light intensity, and shadows.</div>
+          <div class="b-feature-item"><strong>Full Scene Compatibility:</strong> Binary glTF (.glb), JSON glTF (.gltf), and custom project bundle (.cl3d) import/export.</div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ── ABOUT PROJECT MODAL ─────────────────────────────── -->
-  <div class="modal-overlay" id="aboutModal" role="dialog" aria-labelledby="aboutModalTitle">
-    <div class="modal-box about-modal" onclick="event.stopPropagation()">
-      <div class="modal-header">
-        <h3 id="aboutModalTitle">About CoreLink 3D Studio AI</h3>
-        <button type="button" class="modal-close" id="aboutModalClose" aria-label="Close">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
+  <!-- KEYBOARD SHORTCUTS MODAL -->
+  <div class="b-modal-overlay" id="shortcutsModal" role="dialog" aria-labelledby="shortcutsModalTitle">
+    <div class="b-modal-card">
+      <div class="b-modal-header">
+        <h3 id="shortcutsModalTitle" class="b-modal-title">Keyboard Shortcuts</h3>
+        <button type="button" class="b-modal-close" id="shortcutsModalClose" aria-label="Close">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-      <div class="modal-body">
-        <div class="about-content">
-          <p class="about-intro">
-            CoreLink 3D Studio AI is an advanced browser-based 3D workspace powered by Three.js (WebGL 2.0) and integrated local AI LLMs (Qwen 2.5 Coder 7B via Ollama &amp; vLLM). It enables creators to inspect, edit, and manipulate 3D models and lighting environments using real-time natural language commands.
-          </p>
-          
-          <div class="about-features">
-            <h4 class="about-subtitle">Key Features:</h4>
-            <ul class="about-list">
-              <li><strong>AI Natural Language Control:</strong> Control PBR materials, shaders, camera views, and lighting setups via an interactive AI assistant interpreter.</li>
-              <li><strong>Advanced Material &amp; Shader Editor:</strong> Real-time adjustments for Metallic, Roughness, Normal, and Emissive properties, including custom Sci-Fi Overlay and Wireframe modes.</li>
-              <li><strong>Lighting &amp; Environment Presets:</strong> Customizable studio, sunset, cyberpunk, and night lighting setups with live HDRI map support.</li>
-              <li><strong>3D Inspector &amp; Analytics:</strong> Detailed mesh node hierarchy inspection, draw call analytics, poly/vert count metrics, and GLTF/GLB binary scene export.</li>
-            </ul>
-          </div>
+      <div class="b-modal-body">
+        <div class="b-shortcut-grid">
+          <div class="b-short-row"><kbd class="b-kbd">Q</kbd><span>Box Select Tool</span></div>
+          <div class="b-short-row"><kbd class="b-kbd">W</kbd><span>Translate / Move Gizmo</span></div>
+          <div class="b-short-row"><kbd class="b-kbd">E</kbd><span>Rotate Gizmo</span></div>
+          <div class="b-short-row"><kbd class="b-kbd">R</kbd><span>Scale Gizmo</span></div>
+          <div class="b-short-row"><kbd class="b-kbd">F</kbd><span>Frame / Focus Selected Object</span></div>
+          <div class="b-short-row"><kbd class="b-kbd">Del</kbd><span>Delete Selected Object</span></div>
+          <div class="b-short-row"><kbd class="b-kbd">Cmd/Ctrl+Z</kbd><span>Undo</span></div>
+          <div class="b-short-row"><kbd class="b-kbd">Cmd/Ctrl+Shift+Z</kbd><span>Redo</span></div>
+          <div class="b-short-row"><kbd class="b-kbd">Esc</kbd><span>Deselect All</span></div>
+          <div class="b-short-row"><kbd class="b-kbd">Z</kbd><span>Toggle Wireframe Mode</span></div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Three.js import map -->
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-      }
-    }
-  </script>
-  
+  <!-- RECYCLE BIN MODAL -->
+  <div class="b-modal-overlay" id="trashModal" role="dialog" aria-labelledby="trashModalTitle">
+    <div class="b-modal-card">
+      <div class="b-modal-header">
+        <h3 id="trashModalTitle" class="b-modal-title">Recycle Bin</h3>
+        <button type="button" class="b-modal-close" id="trashModalClose" aria-label="Close">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="b-modal-body">
+        <p class="b-modal-desc">Deleted scene objects and models are kept in storage until restored or permanently cleared.</p>
+        <ul class="b-trash-list" id="trashList">
+          <li class="b-trash-empty">Trash is empty</li>
+        </ul>
+        <button type="button" class="b-btn danger" id="btnEmptyTrash" style="margin-top:12px;">Empty Trash Permanently</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Application Entry Script -->
   <script type="module" src="/js/app.js"></script>
 </body>
 </html>

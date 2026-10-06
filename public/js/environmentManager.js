@@ -1,11 +1,10 @@
 /**
  * CoreLink 3D — Environment Manager (environmentManager.js)
- * Manages lighting presets ("Studio", "Sunset", "Cyberpunk", "Night"), shadow maps, ambient intensity, and scene backgrounds.
+ * Manages lighting presets ("Studio", "Sunset", "Cyberpunk", "Night"), shadow maps, ambient intensity,
+ * scene backgrounds and lighting presets.
  */
 
 import * as THREE from 'three';
-import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
-import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import viewer3d from './viewer3d.js';
 
 class EnvironmentManager {
@@ -136,40 +135,6 @@ class EnvironmentManager {
 
   setEnvironmentIntensity(value) {
     viewer3d.setEnvironmentIntensity(value);
-  }
-
-  setBackgroundIntensity(value) {
-    viewer3d.setBackgroundIntensity(value);
-  }
-
-  setBackgroundBlur(value) {
-    viewer3d.setBackgroundBlur(value);
-  }
-
-  setEnvironmentRotation(value) {
-    viewer3d.setEnvironmentRotation(value);
-  }
-
-  loadEnvironmentFile(file) {
-    const extension = file.name.split('.').pop().toLowerCase();
-    if (!['hdr', 'exr'].includes(extension)) return Promise.reject(new Error('Only HDR and EXR environment files are supported.'));
-    const url = URL.createObjectURL(file);
-    const loader = extension === 'hdr' ? new RGBELoader() : new EXRLoader();
-    return new Promise((resolve, reject) => {
-      loader.load(url, (texture) => {
-        URL.revokeObjectURL(url);
-        texture.mapping = THREE.EquirectangularReflectionMapping;
-        const pmrem = new THREE.PMREMGenerator(viewer3d.renderer);
-        pmrem.compileEquirectangularShader();
-        const environmentTexture = pmrem.fromEquirectangular(texture).texture;
-        pmrem.dispose();
-        viewer3d.setEnvironmentTextures(texture, environmentTexture);
-        resolve(texture);
-      }, undefined, (error) => {
-        URL.revokeObjectURL(url);
-        reject(error);
-      });
-    });
   }
 
   setShadowsEnabled(enabled) {

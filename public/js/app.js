@@ -1,275 +1,261 @@
 /**
- * CoreLink 3D — Main Application Controller (app.js)
- * Initializes session management, AI status checks, backend toggle switches, and UI bindings.
+ * CoreLink 3D — Main Application Orchestrator (app.js)
+ * Initializes CoreLink 3D workspace, top dropdown menus,
+ * property tabs, support/donation modal, and boots Babylon.js WebGPU engine.
  */
 
-import viewer3d from './viewer3d.js';
-import uiManager from './ui.js';
+import { webgpuEditor } from './webgpuEditor.js';
 import donationManager from './donationManager.js';
-import assetManager from './assetManager.js';
-import { getSavedModelFile } from './modelStorage.js';
 
 class AppController {
-  constructor() {
-    this.sessionId = null;
-    this.currentBackend = 'ollama';
-    this.setupGlobalErrorHandlers();
-    this.requestThrottleMap = new Map();
-  }
+  init() {
+    console.log('[CoreLink 3D] Starting CoreLink 3D Studio...');
 
-  setupGlobalErrorHandlers() {
-    // Handle unhandled promise rejections
-    window.addEventListener('unhandledrejection', (event) => {
-      console.error('[AppController] Unhandled Promise Rejection:', event.reason);
-      event.preventDefault();
-    });
-
-    // Handle runtime errors gracefully
-    window.addEventListener('error', (event) => {
-      console.error('[AppController] Runtime Error:', event.error);
-    });
-  }
-
-  isRequestThrottled(key, delayMs = 1000) {
-    const now = Date.now();
-    const lastTime = this.requestThrottleMap.get(key) || 0;
-    if (now - lastTime < delayMs) {
-      return true;
-    }
-    this.requestThrottleMap.set(key, now);
-    return false;
-  }
-
-  async init() {
-    console.log('[CoreLink 3D] Initializing Studio App Controller...');
-
-    // 1. Session Setup
-    await this.initSession();
-
-    // 2. Check Local AI Backend Status
-    await this.checkAiStatus();
-    setInterval(() => this.checkAiStatus(), 25000);
-
-    // 3. Initialize UI Controller
-    uiManager.init(this.sessionId);
-    donationManager.init();
+    this.initSplashScreen();
+    this.initMenus();
+    this.initTabs();
     this.initModals();
+    donationManager.init();
 
-    await this.restoreSavedModelOrDemo();
-
-    // 4. Backend Toggle Handlers
-    this.bindBackendToggle();
-
-    console.log('[CoreLink 3D] Studio initialized successfully.');
+    // Boot Babylon 3D Engine immediately
+    webgpuEditor.start();
   }
 
-  initModals() {
-    // Contact Modal
-    const contactModal = document.getElementById('contactModal');
-    const btnContact = document.getElementById('btnContact');
-    const btnMobileContact = document.getElementById('btnMobileContact');
-    const btnContactClose = document.getElementById('contactModalClose');
-    const btnCopyEmail = document.getElementById('btnCopyContactEmail');
-    const contactFeedback = document.getElementById('contactCopyFeedback');
+  initSplashScreen() {
+    const splashScreen = document.getElementById('splashScreen');
+    const newSessionBtn = document.getElementById('splashNewSession');
+    const donateBtn = document.getElementById('splashDonate');
+    const contactBtn = document.getElementById('splashContact');
+    const aboutBtn = document.getElementById('splashAbout');
 
-    const openContactModal = () => {
-      contactModal.classList.add('open');
-      this.closeMobileMenu();
-    };
+    if (!splashScreen) return;
 
-    if (btnContact && contactModal) {
-      btnContact.addEventListener('click', openContactModal);
+    // Clear old session data on fresh install (localStorage check)
+    const installVersion = localStorage.getItem('corelink-install-version');
+    const currentVersion = '1.1.0';
+    
+    if (installVersion !== currentVersion) {
+      // New install or version change - clear all session data
+      console.log('[CoreLink 3D] Clearing old session data...');
+      indexedDB.deleteDatabase('corelink3d-storage');
+      localStorage.removeItem('corelink-scene-backup');
+      localStorage.setItem('corelink-install-version', currentVersion);
+      // Flag to indicate fresh install - don't create default cube
+      localStorage.setItem('corelink-fresh-install', 'true');
     }
-    if (btnMobileContact && contactModal) {
-      btnMobileContact.addEventListener('click', openContactModal);
+
+    // Check if splash screen was already dismissed in session
+    const hasShownSplash = sessionStorage.getItem('corelink-splash-shown');
+    
+    if (hasShownSplash) {
+      document.documentElement.classList.add('splash-hidden');
+      splashScreen.style.display = 'none';
+      splashScreen.remove();
     }
-    if (btnContactClose && contactModal) {
-      btnContactClose.addEventListener('click', () => contactModal.classList.remove('open'));
-      contactModal.addEventListener('click', (event) => {
-        if (event.target === contactModal) contactModal.classList.remove('open');
+
+    // New Session button - closes splash screen and enters clean workspace
+    if (newSessionBtn) {
+      newSessionBtn.addEventListener('click', () => {
+        sessionStorage.setItem('corelink-splash-shown', 'true');
+        document.documentElement.classList.add('splash-hidden');
+        splashScreen.classList.add('hidden');
+        setTimeout(() => splashScreen.remove(), 300);
+        if (webgpuEditor) {
+          webgpuEditor.resetWorkspace();
+        }
       });
     }
-    if (btnCopyEmail) {
+
+    // Donate button - triggers donation modal, keeps splash screen visible
+    if (donateBtn) {
+      donateBtn.addEventListener('click', () => {
+        const donateModal = document.getElementById('donateModal');
+        if (donateModal) {
+          donateModal.classList.add('open');
+          // Keep splash screen visible, don't hide it
+        }
+      });
+    }
+
+    // Contact button - triggers contact modal, keeps splash screen visible
+    if (contactBtn) {
+      contactBtn.addEventListener('click', () => {
+        const contactModal = document.getElementById('contactModal');
+        if (contactModal) {
+          contactModal.classList.add('open');
+          // Keep splash screen visible, don't hide it
+        }
+      });
+    }
+
+    // About button - triggers about modal, keeps splash screen visible
+    if (aboutBtn) {
+      aboutBtn.addEventListener('click', () => {
+        const aboutModal = document.getElementById('aboutModal');
+        if (aboutModal) {
+          aboutModal.classList.add('open');
+          // Keep splash screen visible, don't hide it
+        }
+      });
+    }
+
+    // When modals are closed, splash screen remains visible
+    const modals = ['donateModal', 'contactModal', 'aboutModal'];
+    modals.forEach(modalId => {
+      const modal = document.getElementById(modalId);
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) {
+            modal.classList.remove('open');
+            // Splash screen stays visible
+          }
+        });
+        const closeBtn = modal.querySelector('.b-modal-close');
+        if (closeBtn) {
+          closeBtn.addEventListener('click', () => {
+            modal.classList.remove('open');
+            // Splash screen stays visible
+          });
+        }
+      }
+    });
+  }
+
+  /**
+   * Top Header Dropdown Menus
+   */
+  initMenus() {
+    const menuItems = document.querySelectorAll('.b-menu-item');
+
+    menuItems.forEach((item) => {
+      const btn = item.querySelector('.b-menu-btn');
+      if (!btn) return;
+
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const wasOpen = item.classList.contains('open');
+        this.closeAllMenus();
+        if (!wasOpen) {
+          item.classList.add('open');
+        }
+      });
+
+      // Hover to switch open menu if another is already open
+      item.addEventListener('mouseenter', () => {
+        const anyOpen = document.querySelector('.b-menu-item.open');
+        if (anyOpen && anyOpen !== item) {
+          this.closeAllMenus();
+          item.classList.add('open');
+        }
+      });
+    });
+
+    // Close menus when clicking anywhere else
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.b-menu-item')) {
+        this.closeAllMenus();
+      }
+    });
+
+    // Close on Escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        this.closeAllMenus();
+      }
+    });
+  }
+
+  closeAllMenus() {
+    document.querySelectorAll('.b-menu-item.open').forEach((m) => m.classList.remove('open'));
+  }
+
+  /**
+   * Properties Panel Category Tabs (Object, Material)
+   */
+  initTabs() {
+    const tabs = document.querySelectorAll('.b-prop-tab');
+    const panes = document.querySelectorAll('.b-tab-pane');
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.tab;
+        if (!target) return;
+
+        tabs.forEach((t) => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        panes.forEach((pane) => {
+          const isTarget = pane.id === `pane${target.charAt(0).toUpperCase() + target.slice(1)}`;
+          pane.classList.toggle('active', isTarget);
+        });
+      });
+    });
+  }
+
+  /**
+   * Utility Modals (Donation, Contact, About, Shortcuts, Recycle Bin)
+   */
+  initModals() {
+    const bindModal = (openBtnId, modalId, closeBtnId) => {
+      const openBtn = document.getElementById(openBtnId);
+      const modal = document.getElementById(modalId);
+      const closeBtn = document.getElementById(closeBtnId);
+
+      if (openBtn && modal) {
+        openBtn.addEventListener('click', () => {
+          modal.classList.add('open');
+          this.closeAllMenus();
+        });
+      }
+      if (closeBtn && modal) {
+        closeBtn.addEventListener('click', () => modal.classList.remove('open'));
+      }
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) modal.classList.remove('open');
+        });
+      }
+    };
+
+    // Project Menu -> Donate
+    bindModal('btnMenuDonate', 'donateModal', 'donateModalClose');
+
+    // Project Menu -> Contact
+    bindModal('btnMenuContact', 'contactModal', 'contactModalClose');
+
+    // Project Menu -> About
+    bindModal('btnMenuAbout', 'aboutModal', 'aboutModalClose');
+
+    // Help Menu -> Shortcuts
+    bindModal('btnMenuShortcuts', 'shortcutsModal', 'shortcutsModalClose');
+
+    // Asset Tab -> Recycle Bin
+    bindModal('btnOpenTrash', 'trashModal', 'trashModalClose');
+
+    // Copy email handler
+    const btnCopyEmail = document.getElementById('btnCopyContactEmail');
+    const contactFeedback = document.getElementById('contactCopyFeedback');
+    if (btnCopyEmail && contactFeedback) {
       btnCopyEmail.addEventListener('click', async () => {
         try {
-          await navigator.clipboard.writeText('ruslankiriushenko@gmail.com');
+          await navigator.clipboard.writeText('corelink3d@outlook.com');
           btnCopyEmail.textContent = 'Copied';
-          btnCopyEmail.classList.add('copied');
           contactFeedback.textContent = 'Email copied to clipboard';
         } catch {
-          contactFeedback.textContent = 'Copy failed - select the email manually';
+          contactFeedback.textContent = 'Failed to copy';
         }
-        window.setTimeout(() => {
+        setTimeout(() => {
           btnCopyEmail.textContent = 'Copy Email';
-          btnCopyEmail.classList.remove('copied');
           contactFeedback.textContent = '';
         }, 2200);
       });
     }
-
-    // About Modal
-    const aboutModal = document.getElementById('aboutModal');
-    const btnAbout = document.getElementById('btnAbout');
-    const btnMobileAbout = document.getElementById('btnMobileAbout');
-    const btnAboutClose = document.getElementById('aboutModalClose');
-
-    const openAboutModal = () => {
-      aboutModal.classList.add('open');
-      this.closeMobileMenu();
-    };
-
-    if (btnAbout && aboutModal) {
-      btnAbout.addEventListener('click', openAboutModal);
-    }
-    if (btnMobileAbout && aboutModal) {
-      btnMobileAbout.addEventListener('click', openAboutModal);
-    }
-    if (btnAboutClose && aboutModal) {
-      btnAboutClose.addEventListener('click', () => aboutModal.classList.remove('open'));
-      aboutModal.addEventListener('click', (event) => {
-        if (event.target === aboutModal) aboutModal.classList.remove('open');
-      });
-    }
-
-    // Mobile Donate Button
-    const donateModal = document.getElementById('donateModal');
-    const btnMobileDonate = document.getElementById('btnMobileDonate');
-    if (btnMobileDonate && donateModal) {
-      btnMobileDonate.addEventListener('click', () => {
-        donateModal.classList.add('open');
-        this.closeMobileMenu();
-      });
-    }
-
-    // Mobile Menu Toggle
-    this.initMobileMenu();
-  }
-
-  initMobileMenu() {
-    const btnMobileMenu = document.getElementById('btnMobileMenu');
-    const mobileMenuDrawer = document.getElementById('mobileMenuDrawer');
-
-    if (btnMobileMenu && mobileMenuDrawer) {
-      btnMobileMenu.addEventListener('click', () => {
-        mobileMenuDrawer.classList.toggle('open');
-      });
-    }
-
-    // Close menu when clicking outside
-    document.addEventListener('click', (event) => {
-      if (!event.target.closest('.btn-mobile-menu') && !event.target.closest('.mobile-menu-drawer')) {
-        this.closeMobileMenu();
-      }
-    });
-
-    // Close menu when pressing Escape
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        this.closeMobileMenu();
-      }
-    });
-  }
-
-  closeMobileMenu() {
-    const mobileMenuDrawer = document.getElementById('mobileMenuDrawer');
-    if (mobileMenuDrawer) {
-      mobileMenuDrawer.classList.remove('open');
-    }
-  }
-
-
-  async restoreSavedModelOrDemo() {
-    try {
-      const savedModel = await getSavedModelFile();
-      if (savedModel?.blob) {
-        await viewer3d.loadModelFromFile(savedModel.blob);
-        assetManager.registerUpload(savedModel.name, null);
-        return;
-      }
-    } catch (error) {
-      console.warn('[AppController] Saved model restore failed, loading demo:', error.message);
-    }
-    if (!assetManager.getState().active.length) assetManager.registerDemo('SciFi_Core_Demo.glb');
-  }
-
-  async initSession() {
-    const sessionEl = document.getElementById('sessionId');
-    try {
-      const res = await fetch('/api/session', { method: 'POST' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      this.sessionId = data.sessionId;
-      if (sessionEl) {
-        sessionEl.textContent = data.sessionId.slice(0, 16) + '…';
-      }
-    } catch (err) {
-      console.warn('[AppController] Session init failed, running standalone mode:', err.message);
-      this.sessionId = 'standalone-' + Date.now();
-      if (sessionEl) sessionEl.textContent = 'STANDALONE';
-    }
-  }
-
-  async checkAiStatus() {
-    const dot   = document.getElementById('statusDot');
-    const label = document.getElementById('statusLabel');
-    const model = document.getElementById('statusModel');
-
-    if (dot) dot.className = 'status-dot loading';
-    if (label) label.textContent = 'Checking AI...';
-
-    try {
-      const res  = await fetch('/api/ai/status');
-      const data = await res.json();
-      const active = data.active;
-
-      if (active && active.online && active.modelAvailable) {
-        if (dot) dot.className = 'status-dot online';
-        if (label) label.textContent = 'AI ONLINE';
-        if (model) model.textContent = active.targetModel;
-      } else if (active && active.online) {
-        if (dot) dot.className = 'status-dot loading';
-        if (label) label.textContent = 'MODEL MISSING';
-        if (model) model.textContent = `ollama pull ${active.targetModel}`;
-      } else {
-        if (dot) dot.className = 'status-dot offline';
-        if (label) label.textContent = 'AI OFFLINE';
-        if (model) model.textContent = data.backend === 'vllm' ? 'vLLM server down' : 'Ollama server down';
-      }
-
-      this.currentBackend = data.backend || 'ollama';
-
-      // Sync Toggle Buttons
-      document.querySelectorAll('.backend-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.backend === this.currentBackend);
-      });
-
-    } catch (err) {
-      if (dot) dot.className = 'status-dot offline';
-      if (label) label.textContent = 'SERVER DISCONNECTED';
-      if (model) model.textContent = 'Offline';
-    }
-  }
-
-  bindBackendToggle() {
-    const btns = document.querySelectorAll('.backend-btn');
-    btns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        btns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.currentBackend = btn.dataset.backend;
-        console.log(`[AppController] Switched active backend preference to: ${this.currentBackend}`);
-      });
-    });
   }
 }
 
-function boot() {
-  const app = new AppController();
-  app.init();
-}
+const appController = new AppController();
+window.addEventListener('DOMContentLoaded', () => {
+  appController.init();
+});
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', boot);
-} else {
-  boot();
-}
+export default appController;

@@ -6,11 +6,32 @@
 
 import * as THREE from 'three';
 import viewer3d from './viewer3d.js';
+import { saveModelFile } from './modelStorage.js';
 
 class MaterialManager {
   constructor() {
     this.currentShaderMode = 'pbr';
     this._savedMaterials = new Map();
+    this._saveTimeout = null;
+  }
+
+  _scheduleAutoSave() {
+    if (this._saveTimeout) clearTimeout(this._saveTimeout);
+    this._saveTimeout = setTimeout(() => {
+      this._exportAndSave();
+    }, 1000);
+  }
+
+  async _exportAndSave() {
+    if (!viewer3d.currentModel || !viewer3d.lastLoadedBlob) return;
+    try {
+      const result = await viewer3d.exportSceneGLBBuffer({ binary: true });
+      const blob = new Blob([result.buffer], { type: 'model/gltf-binary' });
+      const fileName = viewer3d.lastLoadedFileName || 'model.glb';
+      await saveModelFile(blob, fileName);
+    } catch (err) {
+      console.warn('[MaterialManager] Auto-save failed:', err);
+    }
   }
 
   /**
@@ -53,6 +74,7 @@ class MaterialManager {
       this._applyToMaterials(targetMeshName, (mat) => {
         if (mat.color) mat.color.copy(color);
       });
+      this._scheduleAutoSave();
     } catch (err) {
       console.warn('[MaterialManager] Invalid color format:', colorHex, err);
     }
@@ -66,6 +88,7 @@ class MaterialManager {
     this._applyToMaterials(targetMeshName, (mat) => {
       if ('roughness' in mat) mat.roughness = val;
     });
+    this._scheduleAutoSave();
   }
 
   /**
@@ -76,6 +99,7 @@ class MaterialManager {
     this._applyToMaterials(targetMeshName, (mat) => {
       if ('metalness' in mat) mat.metalness = val;
     });
+    this._scheduleAutoSave();
   }
 
   /**
@@ -86,6 +110,7 @@ class MaterialManager {
     this._applyToMaterials(targetMeshName, (mat) => {
       if (mat.normalScale) mat.normalScale.set(val, val);
     });
+    this._scheduleAutoSave();
   }
 
   /**
@@ -100,6 +125,7 @@ class MaterialManager {
         if (mat.emissive) mat.emissive.copy(color);
         if ('emissiveIntensity' in mat) mat.emissiveIntensity = val;
       });
+      this._scheduleAutoSave();
     } catch (err) {
       console.warn('[MaterialManager] Error setting emissive:', err);
     }

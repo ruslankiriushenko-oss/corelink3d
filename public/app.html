@@ -4,6 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CoreLink 3D</title>
+  <!-- Favicon and App Icons -->
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <meta name="theme-color" content="#06090e" />
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Roboto+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
@@ -25,12 +32,7 @@
 
     <div class="header-status">
       <span class="status-dot" id="statusDot"></span>
-      <span class="status-label" id="statusLabel">Connecting...</span>
-      <span class="status-model" id="statusModel"></span>
-      <div class="backend-toggle" id="backendToggle" title="Switch AI backend">
-        <button class="backend-btn active" data-backend="ollama">OLLAMA</button>
-        <button class="backend-btn" data-backend="vllm">vLLM</button>
-      </div>
+      <span class="status-label" id="statusLabel">Ready</span>
     </div>
   </header>
 
@@ -114,43 +116,6 @@
       <!-- Viewport drag-drop target -->
       <div class="viewport-drop-zone" id="viewportDropZone"></div>
     </div>
-
-    <!-- RIGHT PANEL: AI CHAT -->
-    <aside class="panel-right">
-      <section class="panel-section chat-section">
-        <h2 class="section-title">AI ASSISTANT</h2>
-
-        <div class="chat-messages" id="chatMessages">
-          <div class="chat-msg system">
-            <span class="msg-role">SYSTEM</span>
-            <span class="msg-text">CoreLink 3D ready. Load a model and ask anything about your scene.</span>
-          </div>
-        </div>
-
-        <div class="chat-input-area">
-          <textarea
-            class="chat-input"
-            id="chatInput"
-            placeholder="Ask about your 3D model, geometry, materials..."
-            rows="3"
-          ></textarea>
-          <div class="chat-actions">
-            <button class="btn-flat" id="btnSend">
-              <span>SEND</span>
-              <span class="btn-icon">→</span>
-            </button>
-            <button class="btn-ghost small" id="btnClearChat">Clear</button>
-            <button class="btn-ghost small" id="btnNewSession">New Session</button>
-          </div>
-          <div class="chat-suggestions" id="chatSuggestions">
-            <button class="suggestion-chip" data-prompt="Analyze the geometry and overall structure of this 3D model in detail.">Analyze geometry</button>
-            <button class="suggestion-chip" data-prompt="What PBR materials and textures would look best for this model?">Suggest materials</button>
-            <button class="suggestion-chip" data-prompt="How can I optimize this model for real-time rendering in a game engine?">Optimize for RT</button>
-            <button class="suggestion-chip" data-prompt="What is the polygon count and how can I reduce it without losing visual quality?">Reduce polygons</button>
-          </div>
-        </div>
-      </section>
-    </aside>
 
   </main>
 

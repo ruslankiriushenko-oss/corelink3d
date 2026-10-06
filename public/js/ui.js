@@ -7,9 +7,10 @@ import viewer3d           from './viewer3d.js';
 import materialManager    from './materialManager.js';
 import environmentManager from './environmentManager.js';
 import modelInspector     from './modelInspector.js';
-import aiController       from './aiController.js';
 import assetManager       from './assetManager.js';
+import projectBundle      from './projectBundle.js';
 import { saveModelFile }  from './modelStorage.js';
+import { validateModelFile } from './modelValidation.js';
 
 class UIManager {
   constructor() {
@@ -31,7 +32,6 @@ class UIManager {
     this._bindEnvironmentControls();
     this._bindViewportQuickTools();
     this._bindFileUploader();
-    this._bindAiController();
     this._bindAssetTrashUI();
     assetManager.onChange(() => this.renderAssetList());
     this.renderAssetList();
@@ -193,22 +193,7 @@ class UIManager {
     ['key', 'fill', 'rim'].forEach((name) => document.getElementById(`${name}LightColor`)?.addEventListener('change', (event) => environmentManager.setLightColor(name, event.target.value)));
     bindRange('exposureControl', 'exposureControlVal', (value) => environmentManager.setExposure(value));
     bindRange('environmentIntensity', 'environmentIntensityVal', (value) => environmentManager.setEnvironmentIntensity(value));
-    bindRange('backgroundIntensity', 'backgroundIntensityVal', (value) => environmentManager.setBackgroundIntensity(value));
-    bindRange('backgroundBlur', 'backgroundBlurVal', (value) => environmentManager.setBackgroundBlur(value));
-    bindRange('skyboxRotation', 'skyboxRotationVal', (value) => environmentManager.setEnvironmentRotation(value));
-    document.getElementById('environmentFile')?.addEventListener('change', (event) => {
-      const file = event.target.files?.[0];
-      const fileName = document.getElementById('environmentFileName');
-      if (fileName) fileName.textContent = file ? file.name : 'No file selected';
-      if (file) {
-        environmentManager.loadEnvironmentFile(file).then(() => {
-          if (fileName) fileName.textContent = `${file.name} - Loaded`;
-        }).catch((error) => {
-          if (fileName) fileName.textContent = `${file.name} - Load failed`;
-          console.warn('[UIManager] Environment load failed:', error.message);
-        });
-      }
-    });
+
     document.getElementById('wireframeOverlayToggle')?.addEventListener('change', (event) => viewer3d.setWireframe(event.target.checked));
     document.getElementById('gridFloorToggle')?.addEventListener('change', (event) => viewer3d.setGridVisible(event.target.checked));
     document.getElementById('hologramToggle')?.addEventListener('change', (event) => viewer3d.setHologram(event.target.checked));
@@ -272,28 +257,48 @@ class UIManager {
     }
 
     // ── Export Handlers ──
+    const btnPanelExportLabel = document.getElementById('btnPanelExportLabel');
+
+    const updateExportUI = () => {
+      const format = exportFormatSelect ? exportFormatSelect.value : 'glb';
+      let label = 'Export Model';
+      if (format === 'cl3d') label = 'Export Project (.cl3d)';
+
+      if (btnPanelExportLabel) btnPanelExportLabel.textContent = label;
+    };
+
+    if (exportFormatSelect) {
+      exportFormatSelect.addEventListener('change', updateExportUI);
+    }
+    updateExportUI();
+
     const handleExport = async (buttonEl) => {
       const format = exportFormatSelect ? exportFormatSelect.value : 'glb';
-      const origText = buttonEl ? buttonEl.innerHTML : '';
+      const origHtml = buttonEl ? buttonEl.innerHTML : '';
       if (buttonEl) {
         buttonEl.disabled = true;
         buttonEl.innerHTML = `⏳ Exporting...`;
       }
 
       try {
-        await viewer3d.exportModel({ format, binary: format === 'glb' });
+        if (format === 'cl3d') {
+          await projectBundle.exportProject();
+        } else {
+          await viewer3d.exportModel({ format, binary: format === 'glb' });
+        }
+
         if (buttonEl) {
           buttonEl.innerHTML = `✓ Exported!`;
           setTimeout(() => {
             buttonEl.disabled = false;
-            buttonEl.innerHTML = origText;
+            buttonEl.innerHTML = origHtml;
           }, 2000);
         }
       } catch (err) {
         alert('Export failed: ' + err.message);
         if (buttonEl) {
           buttonEl.disabled = false;
-          buttonEl.innerHTML = origText;
+          buttonEl.innerHTML = origHtml;
         }
       }
     };
@@ -346,6 +351,7 @@ class UIManager {
   }
 
   // ── 4. FILE UPLOADER & DRAG-AND-DROP ─────────────────────────
+  // ── 4. FILE UPLOADER & DRAG-AND-DROP ─────────────────────────
   _bindFileUploader() {
     const uploadZone   = document.getElementById('uploadZone');
     const fileInput    = document.getElementById('fileInput');
@@ -356,7 +362,30 @@ class UIManager {
     if (uploadZone && fileInput) {
       uploadZone.addEventListener('click', () => fileInput.click());
       fileInput.addEventListener('change', (e) => {
-        if (e.target.files[0]) this.uploadAndLoadModel(e.target.files[0]);
+        const file = e.target?.files?.[0];
+        if (file) this.uploadAndLoadModel(file);
+      });
+
+      // Drag & Drop on Upload Zone directly
+      ['dragenter', 'dragover'].forEach(eventName => {
+        uploadZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          uploadZone.classList.add('drag-over');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        uploadZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          uploadZone.classList.remove('drag-over');
+        });
+      });
+
+      uploadZone.addEventListener('drop', (e) => {
+        const file = e.dataTransfer?.files?.[0];
+        if (file) {
+          this.uploadAndLoadModel(file);
+        }
       });
     }
 
@@ -377,26 +406,41 @@ class UIManager {
       });
 
       canvasContainer.addEventListener('drop', (e) => {
-        const files = e.dataTransfer.files;
-        if (files && files[0]) {
-          this.uploadAndLoadModel(files[0]);
+        const file = e.dataTransfer?.files?.[0];
+        if (file) {
+          this.uploadAndLoadModel(file);
         }
       });
     }
   }
 
   async uploadAndLoadModel(file) {
+    if (!file) {
+      console.warn('[UIManager] uploadAndLoadModel called with empty file');
+      return;
+    }
+
+    // Routing check: If WebGPU Studio "Edit" mode is active, route import directly to editor
+    if (window.webgpuEditor && window.webgpuEditor.isOpen) {
+      try {
+        await window.webgpuEditor.importEditorFile(file);
+      } catch (err) {
+        console.error('[UIManager] Editor routing import failed:', err);
+      }
+      return;
+    }
+
+    const fileInput = document.getElementById('fileInput');
+    const uploadStatus = document.getElementById('uploadStatus');
+
     // Rate limiting check
     if (this.isUploadInProgress) {
       console.warn('[UIManager] Upload already in progress, ignoring new request');
       return;
     }
 
-    const fileInput = document.getElementById('fileInput');
-    const uploadStatus = document.getElementById('uploadStatus');
-    
-    // Input validation
-    if (!file || !(file instanceof File)) {
+    const rawName = file.name || (file instanceof Blob ? 'model.glb' : '');
+    if (!rawName) {
       if (uploadStatus) {
         uploadStatus.textContent = 'Invalid file object';
         uploadStatus.className = 'upload-status error';
@@ -407,7 +451,7 @@ class UIManager {
 
     // File size validation (100MB limit)
     const maxSizeMB = 100;
-    if (file.size > maxSizeMB * 1024 * 1024) {
+    if (file.size && file.size > maxSizeMB * 1024 * 1024) {
       if (uploadStatus) {
         uploadStatus.textContent = `File size exceeds ${maxSizeMB}MB limit`;
         uploadStatus.className = 'upload-status error';
@@ -417,19 +461,58 @@ class UIManager {
     }
 
     // File extension validation - strict check
-    const ext = (file.name.split('.').pop() || '').toLowerCase();
-    const allowedExts = ['glb', 'gltf', 'obj', 'fbx'];
+    const ext = (rawName ? rawName.split('.').pop() : '').toLowerCase();
+    const allowedExts = ['glb', 'gltf', 'obj', 'fbx', 'cl3d'];
     if (!allowedExts.includes(ext)) {
       if (uploadStatus) {
-        uploadStatus.textContent = 'Supported formats: .GLB, .GLTF, .OBJ, .FBX';
+        uploadStatus.textContent = 'Supported formats: .GLB, .GLTF, .OBJ, .FBX, .CL3D';
         uploadStatus.className = 'upload-status error';
       }
       if (fileInput) fileInput.value = '';
       return;
     }
 
-    // Sanitize filename for display
-    const sanitizedName = this._escapeHtml(file.name);
+    // Validate content before it reaches IndexedDB, Three.js, or the project loader.
+    let safeFileName;
+    try {
+      const validation = await validateModelFile(file, rawName);
+      safeFileName = validation.filename;
+    } catch (error) {
+      if (uploadStatus) {
+        uploadStatus.textContent = `Rejected asset: ${this._escapeHtml(error.message)}`;
+        uploadStatus.className = 'upload-status error';
+      }
+      if (fileInput) fileInput.value = '';
+      return;
+    }
+    const sanitizedName = this._escapeHtml(safeFileName);
+
+    if (ext === 'cl3d') {
+      this.isUploadInProgress = true;
+      if (uploadStatus) {
+        uploadStatus.textContent = `Unpacking .cl3d project: ${sanitizedName}...`;
+        uploadStatus.className = 'upload-status loading';
+      }
+
+      try {
+        await projectBundle.loadProject(file, safeFileName);
+        if (uploadStatus) {
+          uploadStatus.textContent = `Loaded project: ${sanitizedName}`;
+          uploadStatus.className = 'upload-status success';
+        }
+        this.updateInspectorUI();
+      } catch (err) {
+        console.error('[UIManager] Project load error:', err);
+        if (uploadStatus) {
+          uploadStatus.textContent = `Project Error: ${this._escapeHtml(err.message || 'Corrupted .cl3d bundle')}`;
+          uploadStatus.className = 'upload-status error';
+        }
+      } finally {
+        this.isUploadInProgress = false;
+        if (fileInput) fileInput.value = '';
+      }
+      return;
+    }
 
     this.isUploadInProgress = true;
     if (uploadStatus) {
@@ -438,7 +521,7 @@ class UIManager {
     }
 
     try {
-      await saveModelFile(file);
+      await saveModelFile(file, safeFileName);
 
       if (uploadStatus) {
         uploadStatus.textContent = `Loading ${sanitizedName}...`;
@@ -447,14 +530,14 @@ class UIManager {
 
       await viewer3d.loadModelFromFile(file, (pct) => {
         if (uploadStatus) uploadStatus.textContent = `Loading ${sanitizedName} (${pct}%)`;
-      });
+      }, safeFileName);
 
       if (uploadStatus) {
         uploadStatus.textContent = `Loaded: ${sanitizedName}`;
         uploadStatus.className = 'upload-status success';
       }
 
-      this._addFileToList(file.name, null);
+      this._addFileToList(safeFileName, null);
       this.updateInspectorUI();
 
     } catch (err) {
@@ -525,8 +608,8 @@ class UIManager {
         <li class="file-item ${isActive ? 'active' : ''}" data-asset-id="${asset.id}">
           <span class="file-icon">📦</span>
           <span class="file-name" title="${safeName}">${safeName}</span>
-          <span class="file-tag">${asset.type === 'demo' ? 'DEMO' : (asset.name.split('.').pop() || 'MODEL').toUpperCase()}</span>
-          <button type="button" class="file-remove" data-remove-asset-id="${asset.id}" aria-label="Delete ${asset.name}">✕</button>
+          <span class="file-tag">${asset.type === 'demo' ? 'DEMO' : ((asset.name ? asset.name.split('.').pop() : '') || 'MODEL').toUpperCase()}</span>
+          <button type="button" class="file-remove" data-remove-asset-id="${asset.id}" aria-label="Delete ${asset.name || 'Model'}">✕</button>
         </li>
       `;
     }).join('');
@@ -602,122 +685,6 @@ class UIManager {
     this.renderAssetList();
   }
 
-  // ── 5. AI CONTROLLER CHAT WINDOW ─────────────────────────────
-  _bindAiController() {
-    const aiInputPrompt  = document.getElementById('aiInputPrompt');
-    const btnSend        = document.getElementById('btnSendAiCommand');
-    const jsonOutput     = document.getElementById('jsonOutput');
-    const aiStatusBadge  = document.getElementById('aiStatusBadge');
-    const execStatusText = document.getElementById('execStatusText');
-    const chips          = document.querySelectorAll('.chip-btn');
-
-    chips.forEach(chip => {
-      chip.addEventListener('click', () => {
-        if (aiInputPrompt) {
-          aiInputPrompt.value = chip.dataset.prompt;
-          aiInputPrompt.focus();
-        }
-      });
-    });
-
-    const submitCommand = async () => {
-      const prompt = aiInputPrompt ? aiInputPrompt.value.trim() : '';
-      if (!prompt) return;
-
-      if (btnSend) btnSend.disabled = true;
-      if (aiStatusBadge) {
-        aiStatusBadge.textContent = 'THINKING...';
-        aiStatusBadge.style.color = '#f59e0b';
-      }
-      if (execStatusText) execStatusText.textContent = 'Qwen 7B processing natural language prompt...';
-
-      try {
-        const result = await aiController.processCommand(prompt, this.sessionId);
-
-        // Display JSON Code
-        if (jsonOutput) {
-          jsonOutput.textContent = JSON.stringify(result.json, null, 2);
-        }
-
-        // Sync UI inputs with applied JSON changes
-        this.syncUiFromState(result.json);
-        this.updateInspectorUI();
-
-        if (aiStatusBadge) {
-          aiStatusBadge.textContent = 'READY';
-          aiStatusBadge.style.color = '#10b981';
-        }
-        if (execStatusText) {
-          execStatusText.textContent = result.applied ? 'Execution status: Applied successfully to 3D Viewport' : 'JSON parsed: No 3D state change required';
-        }
-
-      } catch (err) {
-        if (jsonOutput) {
-          jsonOutput.textContent = JSON.stringify({ error: err.message }, null, 2);
-        }
-        if (aiStatusBadge) {
-          aiStatusBadge.textContent = 'ERROR';
-          aiStatusBadge.style.color = '#ef4444';
-        }
-        if (execStatusText) execStatusText.textContent = `AI Command execution failed: ${err.message}`;
-      } finally {
-        if (btnSend) btnSend.disabled = false;
-      }
-    };
-
-    if (btnSend) btnSend.addEventListener('click', submitCommand);
-    if (aiInputPrompt) {
-      aiInputPrompt.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-          e.preventDefault();
-          submitCommand();
-        }
-      });
-    }
-  }
-
-  /**
-   * Sync UI input values when AI mutates 3D engine state.
-   */
-  syncUiFromState(cmd) {
-    if (!cmd) return;
-
-    if (cmd.color) {
-      const baseColorInput = document.getElementById('baseColorInput');
-      const baseColorHex   = document.getElementById('baseColorHex');
-      const baseColorVal   = document.getElementById('baseColorVal');
-      if (baseColorInput) baseColorInput.value = cmd.color;
-      if (baseColorHex) baseColorHex.value = cmd.color;
-      if (baseColorVal) baseColorVal.textContent = cmd.color;
-    }
-
-    if (cmd.metallic !== undefined) {
-      const metallicRange = document.getElementById('metallicRange');
-      const metallicVal   = document.getElementById('metallicVal');
-      if (metallicRange) metallicRange.value = cmd.metallic;
-      if (metallicVal) metallicVal.textContent = parseFloat(cmd.metallic).toFixed(2);
-    }
-
-    if (cmd.roughness !== undefined) {
-      const roughnessRange = document.getElementById('roughnessRange');
-      const roughnessVal   = document.getElementById('roughnessVal');
-      if (roughnessRange) roughnessRange.value = cmd.roughness;
-      if (roughnessVal) roughnessVal.textContent = parseFloat(cmd.roughness).toFixed(2);
-    }
-
-    if (cmd.environment) {
-      const presetBtns = document.querySelectorAll('.preset-btn');
-      presetBtns.forEach(b => {
-        b.classList.toggle('active', b.dataset.preset === cmd.environment.toLowerCase());
-      });
-    }
-
-    if (cmd.wireframe !== undefined) {
-      const btnToggleWireframe = document.getElementById('btnToggleWireframe');
-      if (btnToggleWireframe) btnToggleWireframe.classList.toggle('active', Boolean(cmd.wireframe));
-    }
-  }
-
   /**
    * Update 3D Inspector Analytics Panel.
    */
@@ -772,7 +739,7 @@ class UIManager {
             <span class="tree-node-name" title="${this._escapeHtml(node.name)}">${this._escapeHtml(node.name)}</span>
             <span class="tree-node-verts">${node.polys} tris</span>
             <label class="switch small">
-              <input type="checkbox" data-mesh="${node.name}" ${node.visible ? 'checked' : ''} />
+              <input type="checkbox" data-mesh="${this._escapeHtml(node.name)}" ${node.visible ? 'checked' : ''} />
               <span class="slider round"></span>
             </label>
           </div>
