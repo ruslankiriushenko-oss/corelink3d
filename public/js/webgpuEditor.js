@@ -31,9 +31,12 @@ class WebGPUEditor {
     this.scene = null;
     this.camera = null;
     this.gizmoManager = null;
+    this.highlightLayer = null;
     this.isWebGPU = false;
     this.isOpen = false;
     this.selectedNode = null;
+    this.selectedNodes = [];
+    this.selectionMode = 'whole';
 
     // Telemetry
     this._lastFpsUpdate = 0;
@@ -253,17 +256,25 @@ class WebGPUEditor {
       });
     }
 
+    // Edit Menu Action Bindings
+    const menuUndo = document.getElementById('menuUndo');
+    const menuRedo = document.getElementById('menuRedo');
+    if (menuUndo) menuUndo.addEventListener('click', () => this.undo());
+    if (menuRedo) menuRedo.addEventListener('click', () => this.redo());
+
     // Mesh Menu Action Bindings
     const menuMeshJoin = document.getElementById('menuMeshJoin');
     const menuMeshFlatShading = document.getElementById('menuMeshFlatShading');
     const menuMeshSmoothShading = document.getElementById('menuMeshSmoothShading');
     const menuMeshFlipNormals = document.getElementById('menuMeshFlipNormals');
+    const menuMeshSlice = document.getElementById('menuMeshSlice');
     const menuMeshToggleWireframe = document.getElementById('menuMeshToggleWireframe');
 
     if (menuMeshJoin) menuMeshJoin.addEventListener('click', () => this.joinSelected());
     if (menuMeshFlatShading) menuMeshFlatShading.addEventListener('click', () => this.setFlatShading());
     if (menuMeshSmoothShading) menuMeshSmoothShading.addEventListener('click', () => this.setSmoothShading());
     if (menuMeshFlipNormals) menuMeshFlipNormals.addEventListener('click', () => this.flipNormals());
+    if (menuMeshSlice) menuMeshSlice.addEventListener('click', () => this.sliceMesh());
     if (menuMeshToggleWireframe) menuMeshToggleWireframe.addEventListener('click', () => this.toggleWireframeMesh());
 
     // Left Shelf: Reset Material to Default Gray
@@ -334,6 +345,9 @@ class WebGPUEditor {
       } else if (ctrlOrMeta && keyLower === 'y') {
         e.preventDefault();
         this.redo();
+      } else if (ctrlOrMeta && keyLower === 'k') {
+        e.preventDefault();
+        this.sliceMesh();
       } else if (ctrlOrMeta && keyLower === 's') {
         e.preventDefault();
         this._scheduleSceneSave({ recordHistory: true });
@@ -584,6 +598,7 @@ class WebGPUEditor {
    * Setup Scene, Lights, Camera, Gizmos, and Default Meshes
    */
   async _initScene() {
+    this._disposeHighlightLayer();
     if (this.scene) {
       this.scene.dispose();
     }
@@ -885,8 +900,36 @@ class WebGPUEditor {
     }, 400);
   }
 
+  _serializeScene(scene = this.scene) {
+    if (!scene) return {};
+    const serialized = BABYLON.SceneSerializer.Serialize(scene);
+
+    // Удаляем любые HighlightLayer / EffectLayer подсветки из сериализации,
+    // чтобы рамки выделения никогда не сохранялись как часть 3D-сцены
+    if (Array.isArray(serialized.effectLayers)) {
+      serialized.effectLayers = serialized.effectLayers.filter(l => l.name !== 'selectionHighlight');
+      if (serialized.effectLayers.length === 0) delete serialized.effectLayers;
+    }
+
+    // Нормализуем параметры StudioOrbitCamera в снимке, чтобы вращение и зум камеры
+    // не считались изменением содержимого 3D-сцены и не сбрасывали стек Redo
+    if (Array.isArray(serialized.cameras)) {
+      serialized.cameras.forEach(cam => {
+        if (cam.name === 'StudioOrbitCamera') {
+          cam.alpha = 0;
+          cam.beta = 0;
+          cam.radius = 10;
+          cam.position = [0, 1, 0];
+          cam.target = [0, 1, 0];
+        }
+      });
+    }
+
+    return serialized;
+  }
+
   _captureSceneSnapshot() {
-    return JSON.stringify(BABYLON.SceneSerializer.Serialize(this.scene));
+    return JSON.stringify(this._serializeScene(this.scene));
   }
 
   _commitSceneHistory() {
@@ -896,6 +939,8 @@ class WebGPUEditor {
       this.undoStack.push({
         scene: this._historyBaseline,
         selectedName: this.selectedNode?.name || null,
+        selectionMode: this.selectionMode || 'whole',
+        applyHighlight: Boolean(this.selectedNode && this.selectionMode === 'submesh')
       });
       if (this.undoStack.length > 50) this.undoStack.shift();
       this.redoStack = [];
@@ -906,22 +951,63 @@ class WebGPUEditor {
   /** Загружает сцену, сериализованную через SceneSerializer, и возвращает НОВУЮ Scene. */
   async _loadSerializedScene(serialized) {
     const json = typeof serialized === 'string' ? serialized : JSON.stringify(serialized);
-    return BABYLON.SceneLoader.LoadAsync('', 'data:' + json, this.engine);
+    const loaded = await BABYLON.SceneLoader.LoadAsync('', 'data:' + json, this.engine);
+    if (Array.isArray(loaded.effectLayers)) {
+      loaded.effectLayers.slice().forEach(layer => {
+        if (layer.name === 'selectionHighlight') {
+          try { layer.dispose(); } catch (e) {}
+        }
+      });
+    }
+    return loaded;
   }
 
-  async _restoreSceneSnapshot(snapshot, selectedName = null) {
+  async _restoreSceneSnapshot(entry) {
+    const snapshot = typeof entry === 'string' ? entry : entry.scene;
+    const selectedName = typeof entry === 'object' ? entry?.selectedName : null;
+    const selectionMode = (typeof entry === 'object' && entry?.selectionMode) || 'whole';
+    const applyHighlight = Boolean(typeof entry === 'object' && entry?.applyHighlight);
+
+    const savedCamState = this.camera ? {
+      alpha: this.camera.alpha,
+      beta: this.camera.beta,
+      radius: this.camera.radius,
+      target: this.camera.target ? this.camera.target.clone() : null
+    } : null;
+
     const restoredScene = await this._loadSerializedScene(snapshot);
     const previousScene = this.scene;
     this.gizmoManager?.dispose();
+    this._disposeHighlightLayer();
     this.scene = restoredScene;
     this.camera = restoredScene.activeCamera || restoredScene.activeCameras?.[0] || restoredScene.cameras[0] || null;
     this.selectedNode = null;
+    this.selectedNodes = [];
     previousScene?.dispose();
-    this.camera?.attachControl(this.canvas, true);
+
+    if (this.camera) {
+      if (savedCamState) {
+        this.camera.alpha = savedCamState.alpha;
+        this.camera.beta = savedCamState.beta;
+        this.camera.radius = savedCamState.radius;
+        if (savedCamState.target && this.camera.setTarget) {
+          this.camera.setTarget(savedCamState.target);
+        }
+      }
+      this.camera.attachControl(this.canvas, true);
+    }
+
+    HELPER_MESHES.forEach(name => {
+      const m = restoredScene.getMeshByName(name);
+      if (m) m.isPickable = false;
+    });
+
     this._initGizmoManager();
     this._bindScenePicking(restoredScene);
     this._refreshSceneGraph();
-    this.selectNode(selectedName ? restoredScene.getNodeByName(selectedName) : null);
+
+    const restoredSelection = selectedName ? (restoredScene.getNodeByName(selectedName) || restoredScene.getMeshByName(selectedName)) : null;
+    this.selectNode(restoredSelection, selectionMode, applyHighlight && Boolean(restoredSelection));
   }
 
   async undo() {
@@ -933,8 +1019,13 @@ class WebGPUEditor {
 
     this._historyInProgress = true;
     try {
-      this.redoStack.push({ scene: this._captureSceneSnapshot(), selectedName: entry.selectedName });
-      await this._restoreSceneSnapshot(entry.scene, entry.selectedName);
+      this.redoStack.push({
+        scene: this._captureSceneSnapshot(),
+        selectedName: this.selectedNode?.name || null,
+        selectionMode: this.selectionMode || 'whole',
+        applyHighlight: Boolean(this.selectedNode && this.selectionMode === 'submesh')
+      });
+      await this._restoreSceneSnapshot(entry);
       this.log('Undo', 'info');
     } catch (error) {
       this.undoStack.push(entry);
@@ -950,14 +1041,18 @@ class WebGPUEditor {
   async redo() {
     if (this._historyInProgress || !this.redoStack.length) return;
     clearTimeout(this._saveTimer);
-    this._commitSceneHistory();
     const entry = this.redoStack.pop();
     if (!entry) return;
 
     this._historyInProgress = true;
     try {
-      this.undoStack.push({ scene: this._captureSceneSnapshot(), selectedName: entry.selectedName });
-      await this._restoreSceneSnapshot(entry.scene, entry.selectedName);
+      this.undoStack.push({
+        scene: this._captureSceneSnapshot(),
+        selectedName: this.selectedNode?.name || null,
+        selectionMode: this.selectionMode || 'whole',
+        applyHighlight: Boolean(this.selectedNode && this.selectionMode === 'submesh')
+      });
+      await this._restoreSceneSnapshot(entry);
       this.log('Redo', 'info');
     } catch (error) {
       this.redoStack.push(entry);
@@ -982,7 +1077,7 @@ class WebGPUEditor {
       do {
         this._savePending = false;
         const scene = this.scene;
-        const serialized = BABYLON.SceneSerializer.Serialize(scene);
+        const serialized = this._serializeScene(scene);
         const serializedString = JSON.stringify(serialized);
         
         console.log('[WebGPUEditor] Saving scene, length:', serializedString.length);
@@ -1011,6 +1106,7 @@ class WebGPUEditor {
         const restoredScene = await this._loadSerializedScene(json);
         const previousScene = this.scene;
         this.gizmoManager?.dispose();
+        this._disposeHighlightLayer();
         this.scene = restoredScene;
         this.camera = restoredScene.activeCamera
           || restoredScene.activeCameras?.[0]
@@ -1018,6 +1114,10 @@ class WebGPUEditor {
           || null;
         previousScene?.dispose();
         this.camera?.attachControl(this.canvas, true);
+        HELPER_MESHES.forEach(name => {
+          const m = restoredScene.getMeshByName(name);
+          if (m) m.isPickable = false;
+        });
         this._initGizmoManager();
         this._bindScenePicking(restoredScene);
         this.selectedNode = null;
@@ -1052,6 +1152,7 @@ class WebGPUEditor {
     clearSavedEditorModelFile().catch(() => {});
     clearSavedEditorSceneState().catch(() => {});
     localStorage.removeItem('corelink-scene-backup');
+    this._disposeHighlightLayer();
     this._initScene().then(() => {
       this.selectedNode = null;
       this._refreshSceneGraph();
@@ -1132,7 +1233,7 @@ class WebGPUEditor {
 
   async _saveCurrentModelAsDefault() {
     try {
-      const serialized = BABYLON.SceneSerializer.Serialize(this.scene);
+      const serialized = this._serializeScene(this.scene);
       await saveEditorSceneState(JSON.stringify(serialized));
     } catch (err) {
       console.warn('[WebGPUEditor] Could not save current model as default:', err);
@@ -1290,8 +1391,45 @@ class WebGPUEditor {
     this.selectNodes(node ? [node] : [], mode, applyHighlight);
   }
 
-  _clearHighlight() {
+  _disposeHighlightLayer() {
     if (this.highlightLayer) {
+      try {
+        this.highlightLayer.dispose();
+      } catch (e) {}
+      this.highlightLayer = null;
+    }
+  }
+
+  _ensureHighlightLayer() {
+    if (!this.scene || !BABYLON.HighlightLayer) return null;
+
+    const isValid = this.highlightLayer &&
+                    !this.highlightLayer.isDisposed &&
+                    this.highlightLayer.getScene &&
+                    this.highlightLayer.getScene() === this.scene;
+
+    if (!isValid) {
+      this._disposeHighlightLayer();
+      try {
+        const layer = new BABYLON.HighlightLayer('selectionHighlight', this.scene, {
+          isStroke: true,
+          mainTextureRatio: 1
+        });
+        layer.innerGlow = false;
+        layer.outerGlow = true;
+        layer.blurHorizontalSize = 0.5;
+        layer.blurVerticalSize = 0.5;
+        this.highlightLayer = layer;
+      } catch (e) {
+        console.warn('[WebGPUEditor] Could not initialize HighlightLayer:', e);
+        this.highlightLayer = null;
+      }
+    }
+    return this.highlightLayer;
+  }
+
+  _clearHighlight() {
+    if (this.highlightLayer && !this.highlightLayer.isDisposed) {
       try {
         this.highlightLayer.removeAllMeshes();
       } catch (e) {}
@@ -1304,29 +1442,14 @@ class WebGPUEditor {
 
   _applyHighlightMulti(nodes, mode = 'whole') {
     if (!this.scene) return;
-
-    if (!this.highlightLayer && BABYLON.HighlightLayer) {
-      try {
-        this.highlightLayer = new BABYLON.HighlightLayer("selectionHighlight", this.scene, { 
-          isStroke: true,
-          mainTextureRatio: 1
-        });
-        this.highlightLayer.innerGlow = false;
-        this.highlightLayer.outerGlow = true;
-        this.highlightLayer.blurHorizontalSize = 0.5;
-        this.highlightLayer.blurVerticalSize = 0.5;
-      } catch (e) {
-        console.warn('[WebGPUEditor] Could not initialize HighlightLayer:', e);
-      }
-    }
-
-    if (!this.highlightLayer) return;
+    const layer = this._ensureHighlightLayer();
+    if (!layer) return;
 
     try {
-      this.highlightLayer.removeAllMeshes();
+      layer.removeAllMeshes();
       if (!nodes || nodes.length === 0) return;
 
-      const colorHex = mode === 'submesh' ? "#FFA500" : "#00BFFF";
+      const colorHex = mode === 'submesh' ? '#FFA500' : '#00BFFF';
       const highlightColor = BABYLON.Color3.FromHexString(colorHex);
 
       const meshesToHighlight = new Set();
@@ -1350,7 +1473,7 @@ class WebGPUEditor {
       meshesToHighlight.forEach(m => {
         try {
           if (m && (!m.isDisposed || !m.isDisposed())) {
-            this.highlightLayer.addMesh(m, highlightColor);
+            layer.addMesh(m, highlightColor);
           }
         } catch (e) {}
       });
@@ -1358,7 +1481,6 @@ class WebGPUEditor {
       console.warn('[WebGPUEditor] Multi-Highlight error:', err);
     }
   }
-
 
   joinSelected() {
     let meshesToMerge = [];
@@ -1709,6 +1831,374 @@ class WebGPUEditor {
     this.log(`Toggled wireframe display for ${target.name}`, 'info');
   }
 
+  /**
+   * Slice the selected mesh along a cutting plane through its center.
+   * Full solid polygon clipping with automatic Cap Holes / Fill Caps generation,
+   * proper normal orientation, planar UV mapping, and two-sided rendering.
+   */
+  sliceMesh(target = this.selectedNode) {
+    if (!target) {
+      this.log('Select a mesh to slice', 'warn');
+      return;
+    }
+
+    let meshToSlice = null;
+    if (target instanceof BABYLON.Mesh && target.getVerticesData(BABYLON.VertexBuffer.PositionKind)) {
+      meshToSlice = target;
+    } else if (target.getChildMeshes) {
+      meshToSlice = target.getChildMeshes(false).find(m => m instanceof BABYLON.Mesh && m.getVerticesData(BABYLON.VertexBuffer.PositionKind));
+    }
+
+    if (!meshToSlice) {
+      this.log('Selected object has no polygon geometry to slice', 'warn');
+      return;
+    }
+
+    try {
+      console.log('[WebGPUEditor] Starting solid mesh slice for:', meshToSlice.name);
+
+      // Шаг 1: Секущая плоскость — горизонтальная через центр меша в мировом пространстве
+      meshToSlice.computeWorldMatrix(true);
+      const boundingInfo = meshToSlice.getBoundingInfo();
+      const centerWorld = boundingInfo.boundingBox.centerWorld.clone();
+      const planeNormalWorld = new BABYLON.Vector3(0, 1, 0); // горизонтальный срез
+
+      // Переводим секущую плоскость в локальное пространство меша
+      const worldMatrix = meshToSlice.getWorldMatrix();
+      const invWorldMatrix = BABYLON.Matrix.Invert(worldMatrix);
+
+      const planePointLocal = BABYLON.Vector3.TransformCoordinates(centerWorld, invWorldMatrix);
+      const planeNormalLocal = BABYLON.Vector3.TransformNormal(planeNormalWorld, invWorldMatrix).normalize();
+
+      // Шаг 2: Извлекаем вершинные данные
+      const origPositions = meshToSlice.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+      const origIndices = meshToSlice.getIndices();
+      const origNormals = meshToSlice.getVerticesData(BABYLON.VertexBuffer.NormalKind);
+      const origUVs = meshToSlice.getVerticesData(BABYLON.VertexBuffer.UVKind);
+
+      if (!origPositions || !origIndices || origIndices.length === 0) {
+        this.log('Mesh has no polygon geometry to slice', 'warn');
+        return;
+      }
+
+      const numVertices = origPositions.length / 3;
+      const distances = new Float64Array(numVertices);
+      const px = planePointLocal.x, py = planePointLocal.y, pz = planePointLocal.z;
+      const nx = planeNormalLocal.x, ny = planeNormalLocal.y, nz = planeNormalLocal.z;
+
+      for (let i = 0; i < numVertices; i++) {
+        const vx = origPositions[i * 3];
+        const vy = origPositions[i * 3 + 1];
+        const vz = origPositions[i * 3 + 2];
+        distances[i] = (vx - px) * nx + (vy - py) * ny + (vz - pz) * nz;
+      }
+
+      // Шаг 3: Буферы для верхней и нижней частей
+      const upperPositions = [], upperNormals = [], upperUVs = [], upperIndices = [];
+      const lowerPositions = [], lowerNormals = [], lowerUVs = [], lowerIndices = [];
+      const cutSegments = []; // Сегменты среза для крышек (Cap Holes)
+
+      const addVertexTo = (posArr, normArr, uvArr, pos, norm, uv) => {
+        const idx = posArr.length / 3;
+        posArr.push(pos.x, pos.y, pos.z);
+        normArr.push(norm.x, norm.y, norm.z);
+        if (uv) {
+          uvArr.push(uv.x, uv.y);
+        } else {
+          uvArr.push(0, 0);
+        }
+        return idx;
+      };
+
+      const getVertex = (idx) => {
+        const pos = new BABYLON.Vector3(origPositions[idx * 3], origPositions[idx * 3 + 1], origPositions[idx * 3 + 2]);
+        const norm = origNormals
+          ? new BABYLON.Vector3(origNormals[idx * 3], origNormals[idx * 3 + 1], origNormals[idx * 3 + 2])
+          : planeNormalLocal.clone();
+        const uv = origUVs
+          ? new BABYLON.Vector2(origUVs[idx * 2], origUVs[idx * 2 + 1])
+          : new BABYLON.Vector2(0, 0);
+        return { pos, norm, uv };
+      };
+
+      const interpolateVertex = (idxA, idxB, dA, dB) => {
+        const denom = dA - dB;
+        const t = Math.abs(denom) > 1e-12 ? Math.max(0, Math.min(1, dA / denom)) : 0.5;
+
+        const ax = origPositions[idxA * 3], ay = origPositions[idxA * 3 + 1], az = origPositions[idxA * 3 + 2];
+        const bx = origPositions[idxB * 3], by = origPositions[idxB * 3 + 1], bz = origPositions[idxB * 3 + 2];
+        const pos = new BABYLON.Vector3(ax + t * (bx - ax), ay + t * (by - ay), az + t * (bz - az));
+
+        let norm = planeNormalLocal.clone();
+        if (origNormals) {
+          const nax = origNormals[idxA * 3], nay = origNormals[idxA * 3 + 1], naz = origNormals[idxA * 3 + 2];
+          const nbx = origNormals[idxB * 3], nby = origNormals[idxB * 3 + 1], nbz = origNormals[idxB * 3 + 2];
+          norm = new BABYLON.Vector3(nax + t * (nbx - nax), nay + t * (nby - nay), naz + t * (nbz - naz)).normalize();
+        }
+
+        let uv = new BABYLON.Vector2(0, 0);
+        if (origUVs) {
+          const uax = origUVs[idxA * 2], uay = origUVs[idxA * 2 + 1];
+          const ubx = origUVs[idxB * 2], uby = origUVs[idxB * 2 + 1];
+          uv = new BABYLON.Vector2(uax + t * (ubx - uax), uay + t * (uby - uay));
+        }
+
+        return { pos, norm, uv };
+      };
+
+      const EPS = 1e-6;
+
+      // Шаг 4: Разрезание каждого треугольника
+      for (let i = 0; i < origIndices.length; i += 3) {
+        const i0 = origIndices[i];
+        const i1 = origIndices[i + 1];
+        const i2 = origIndices[i + 2];
+
+        const d0 = distances[i0];
+        const d1 = distances[i1];
+        const d2 = distances[i2];
+
+        const s0 = d0 > EPS ? 1 : (d0 < -EPS ? -1 : 0);
+        const s1 = d1 > EPS ? 1 : (d1 < -EPS ? -1 : 0);
+        const s2 = d2 > EPS ? 1 : (d2 < -EPS ? -1 : 0);
+
+        // Все вершины выше или на плоскости
+        if (s0 >= 0 && s1 >= 0 && s2 >= 0) {
+          const v0 = getVertex(i0), v1 = getVertex(i1), v2 = getVertex(i2);
+          const u0 = addVertexTo(upperPositions, upperNormals, upperUVs, v0.pos, v0.norm, v0.uv);
+          const u1 = addVertexTo(upperPositions, upperNormals, upperUVs, v1.pos, v1.norm, v1.uv);
+          const u2 = addVertexTo(upperPositions, upperNormals, upperUVs, v2.pos, v2.norm, v2.uv);
+          upperIndices.push(u0, u1, u2);
+          continue;
+        }
+
+        // Все вершины ниже или на плоскости
+        if (s0 <= 0 && s1 <= 0 && s2 <= 0) {
+          const v0 = getVertex(i0), v1 = getVertex(i1), v2 = getVertex(i2);
+          const l0 = addVertexTo(lowerPositions, lowerNormals, lowerUVs, v0.pos, v0.norm, v0.uv);
+          const l1 = addVertexTo(lowerPositions, lowerNormals, lowerUVs, v1.pos, v1.norm, v1.uv);
+          const l2 = addVertexTo(lowerPositions, lowerNormals, lowerUVs, v2.pos, v2.norm, v2.uv);
+          lowerIndices.push(l0, l1, l2);
+          continue;
+        }
+
+        // Треугольник пересекает плоскость: находим вершину-одиночку (solo)
+        const tri = [i0, i1, i2];
+        const dists = [d0, d1, d2];
+        const signs = [s0, s1, s2];
+
+        let soloIdx = 0;
+        if (signs[0] === signs[1]) soloIdx = 2;
+        else if (signs[0] === signs[2]) soloIdx = 1;
+        else soloIdx = 0;
+
+        const pair1Idx = (soloIdx + 1) % 3;
+        const pair2Idx = (soloIdx + 2) % 3;
+
+        const idxSolo = tri[soloIdx], dSolo = dists[soloIdx];
+        const idxPair1 = tri[pair1Idx], dPair1 = dists[pair1Idx];
+        const idxPair2 = tri[pair2Idx], dPair2 = dists[pair2Idx];
+
+        const int1 = interpolateVertex(idxSolo, idxPair1, dSolo, dPair1);
+        const int2 = interpolateVertex(idxSolo, idxPair2, dSolo, dPair2);
+
+        const vSolo = getVertex(idxSolo);
+        const vPair1 = getVertex(idxPair1);
+        const vPair2 = getVertex(idxPair2);
+
+        if (dSolo > 0) {
+          // Solo вверху: верх получает 1 треугольник (vSolo, int1, int2)
+          const u0 = addVertexTo(upperPositions, upperNormals, upperUVs, vSolo.pos, vSolo.norm, vSolo.uv);
+          const u1 = addVertexTo(upperPositions, upperNormals, upperUVs, int1.pos, int1.norm, int1.uv);
+          const u2 = addVertexTo(upperPositions, upperNormals, upperUVs, int2.pos, int2.norm, int2.uv);
+          upperIndices.push(u0, u1, u2);
+
+          // Низ получает 2 треугольника: (int1, vPair1, vPair2) и (int1, vPair2, int2)
+          const l0 = addVertexTo(lowerPositions, lowerNormals, lowerUVs, int1.pos, int1.norm, int1.uv);
+          const l1 = addVertexTo(lowerPositions, lowerNormals, lowerUVs, vPair1.pos, vPair1.norm, vPair1.uv);
+          const l2 = addVertexTo(lowerPositions, lowerNormals, lowerUVs, vPair2.pos, vPair2.norm, vPair2.uv);
+          const l3 = addVertexTo(lowerPositions, lowerNormals, lowerUVs, int2.pos, int2.norm, int2.uv);
+          lowerIndices.push(l0, l1, l2);
+          lowerIndices.push(l0, l2, l3);
+
+          // Сегмент среза для крышек
+          cutSegments.push({ p1: int1.pos.clone(), p2: int2.pos.clone() });
+        } else {
+          // Solo внизу: низ получает 1 треугольник (vSolo, int1, int2)
+          const l0 = addVertexTo(lowerPositions, lowerNormals, lowerUVs, vSolo.pos, vSolo.norm, vSolo.uv);
+          const l1 = addVertexTo(lowerPositions, lowerNormals, lowerUVs, int1.pos, int1.norm, int1.uv);
+          const l2 = addVertexTo(lowerPositions, lowerNormals, lowerUVs, int2.pos, int2.norm, int2.uv);
+          lowerIndices.push(l0, l1, l2);
+
+          // Верх получает 2 треугольника: (int1, vPair1, vPair2) и (int1, vPair2, int2)
+          const u0 = addVertexTo(upperPositions, upperNormals, upperUVs, int1.pos, int1.norm, int1.uv);
+          const u1 = addVertexTo(upperPositions, upperNormals, upperUVs, vPair1.pos, vPair1.norm, vPair1.uv);
+          const u2 = addVertexTo(upperPositions, upperNormals, upperUVs, vPair2.pos, vPair2.norm, vPair2.uv);
+          const u3 = addVertexTo(upperPositions, upperNormals, upperUVs, int2.pos, int2.norm, int2.uv);
+          upperIndices.push(u0, u1, u2);
+          upperIndices.push(u0, u2, u3);
+
+          // Сегмент среза для крышек (противоположное направление обхода)
+          cutSegments.push({ p1: int2.pos.clone(), p2: int1.pos.clone() });
+        }
+      }
+
+      // Шаг 5: Автоматическая генерация закрывающих крышек среза (Cap Holes / Fill Caps)
+      if (cutSegments.length >= 3) {
+        let capX = 0, capY = 0, capZ = 0;
+        for (const seg of cutSegments) {
+          capX += seg.p1.x + seg.p2.x;
+          capY += seg.p1.y + seg.p2.y;
+          capZ += seg.p1.z + seg.p2.z;
+        }
+        const totalPoints = cutSegments.length * 2;
+        const capCenter = new BABYLON.Vector3(capX / totalPoints, capY / totalPoints, capZ / totalPoints);
+
+        // Локальный тангенциальный 2D-базис для планарного проецирования UV на срезе
+        let tangentU = new BABYLON.Vector3(1, 0, 0);
+        if (Math.abs(planeNormalLocal.x) > 0.8) {
+          tangentU = new BABYLON.Vector3(0, 0, 1);
+        }
+        const basisU = BABYLON.Vector3.Cross(planeNormalLocal, tangentU).normalize();
+        const basisV = BABYLON.Vector3.Cross(planeNormalLocal, basisU).normalize();
+
+        let maxCapRadius = 0.001;
+        for (const seg of cutSegments) {
+          maxCapRadius = Math.max(
+            maxCapRadius,
+            BABYLON.Vector3.Distance(seg.p1, capCenter),
+            BABYLON.Vector3.Distance(seg.p2, capCenter)
+          );
+        }
+        const uvScale = Math.max(maxCapRadius * 2, 0.01);
+
+        const getCapUV = (pt) => {
+          const diff = pt.subtract(capCenter);
+          return new BABYLON.Vector2(
+            0.5 + BABYLON.Vector3.Dot(diff, basisU) / uvScale,
+            0.5 + BABYLON.Vector3.Dot(diff, basisV) / uvScale
+          );
+        };
+
+        const uvCenter = getCapUV(capCenter);
+        const normCapUpper = planeNormalLocal.scale(-1); // смотрит наружу верхней части (вниз)
+        const normCapLower = planeNormalLocal.clone();   // смотрит наружу нижней части (вверх)
+
+        // Генерируем веер треугольников крышки
+        for (const seg of cutSegments) {
+          const uv1 = getCapUV(seg.p1);
+          const uv2 = getCapUV(seg.p2);
+
+          // Нижняя крышка (нормаль +N, обход Center -> p1 -> p2)
+          const lC = addVertexTo(lowerPositions, lowerNormals, lowerUVs, capCenter, normCapLower, uvCenter);
+          const l1 = addVertexTo(lowerPositions, lowerNormals, lowerUVs, seg.p1, normCapLower, uv1);
+          const l2 = addVertexTo(lowerPositions, lowerNormals, lowerUVs, seg.p2, normCapLower, uv2);
+          lowerIndices.push(lC, l1, l2);
+
+          // Верхняя крышка (нормаль -N, обход Center -> p2 -> p1)
+          const uC = addVertexTo(upperPositions, upperNormals, upperUVs, capCenter, normCapUpper, uvCenter);
+          const u2 = addVertexTo(upperPositions, upperNormals, upperUVs, seg.p2, normCapUpper, uv2);
+          const u1 = addVertexTo(upperPositions, upperNormals, upperUVs, seg.p1, normCapUpper, uv1);
+          upperIndices.push(uC, u2, u1);
+        }
+      }
+
+      // Шаг 6: Создание двух новых независимых мешей
+      let upperMesh = null;
+      let lowerMesh = null;
+
+      if (upperIndices.length > 0) {
+        upperMesh = new BABYLON.Mesh(`${meshToSlice.name}_Upper`, this.scene);
+        upperMesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, new Float32Array(upperPositions), true);
+        upperMesh.setIndices(new Uint32Array(upperIndices));
+        upperMesh.setVerticesData(BABYLON.VertexBuffer.NormalKind, new Float32Array(upperNormals), true);
+        upperMesh.setVerticesData(BABYLON.VertexBuffer.UVKind, new Float32Array(upperUVs), true);
+      }
+
+      if (lowerIndices.length > 0) {
+        lowerMesh = new BABYLON.Mesh(`${meshToSlice.name}_Lower`, this.scene);
+        lowerMesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, new Float32Array(lowerPositions), true);
+        lowerMesh.setIndices(new Uint32Array(lowerIndices));
+        lowerMesh.setVerticesData(BABYLON.VertexBuffer.NormalKind, new Float32Array(lowerNormals), true);
+        lowerMesh.setVerticesData(BABYLON.VertexBuffer.UVKind, new Float32Array(lowerUVs), true);
+      }
+
+      if (!upperMesh && !lowerMesh) {
+        this.log('Slice did not produce any geometry', 'warn');
+        return;
+      }
+
+      // Шаг 7: Настройка двухсторонних материалов (Backface Culling = false)
+      const configureMaterial = (mesh) => {
+        if (!mesh) return;
+        if (meshToSlice.material) {
+          const mat = meshToSlice.material.clone(`${mesh.name}_Mat`);
+          mat.backFaceCulling = false;
+          if (mat.twoSidedLighting !== undefined) {
+            mat.twoSidedLighting = true;
+          }
+          mesh.material = mat;
+        }
+      };
+
+      configureMaterial(upperMesh);
+      configureMaterial(lowerMesh);
+
+      // Шаг 8: Трансформации и аккуратное визуальное разведение половин
+      const separation = 0.08; // небольшой зазор для наглядности разреза
+      const offsetVecWorld = planeNormalWorld.scale(separation);
+
+      if (upperMesh) {
+        if (meshToSlice.parent) upperMesh.parent = meshToSlice.parent;
+        upperMesh.position = meshToSlice.position.add(offsetVecWorld);
+        upperMesh.rotation = meshToSlice.rotation.clone();
+        upperMesh.scaling = meshToSlice.scaling.clone();
+        upperMesh.computeWorldMatrix(true);
+        upperMesh.refreshBoundingInfo();
+      }
+
+      if (lowerMesh) {
+        if (meshToSlice.parent) lowerMesh.parent = meshToSlice.parent;
+        lowerMesh.position = meshToSlice.position.subtract(offsetVecWorld);
+        lowerMesh.rotation = meshToSlice.rotation.clone();
+        lowerMesh.scaling = meshToSlice.scaling.clone();
+        lowerMesh.computeWorldMatrix(true);
+        lowerMesh.refreshBoundingInfo();
+      }
+
+      // Шаг 9: Запись в историю Undo/Redo и удаление исходного меша
+      clearTimeout(this._saveTimer);
+      this._commitSceneHistory();
+      this.undoStack.push({
+        scene: this._captureSceneSnapshot(),
+        selectedName: meshToSlice.name,
+        selectionMode: 'whole',
+        applyHighlight: false
+      });
+      if (this.undoStack.length > 50) this.undoStack.shift();
+      this.redoStack = [];
+
+      meshToSlice.dispose();
+
+      this._refreshSceneGraph();
+
+      if (upperMesh) {
+        this.selectNode(upperMesh, 'whole', false);
+      } else if (lowerMesh) {
+        this.selectNode(lowerMesh, 'whole', false);
+      }
+
+      this._historyBaseline = this._captureSceneSnapshot();
+      this._scheduleSceneSave({ recordHistory: false });
+
+      this.log(`Mesh cleanly sliced into solid parts with Fill Caps: ${upperMesh ? upperMesh.name : ''} & ${lowerMesh ? lowerMesh.name : ''}`, 'info');
+
+    } catch (e) {
+      console.error('[WebGPUEditor] Slice failed:', e);
+      this.log(`Slice failed: ${e.message}`, 'error');
+    }
+  }
+
   resetToDefaultGrayMaterial(target = this.selectedNode) {
     if (!target) {
       this.log('Select a mesh or model to reset material', 'warn');
@@ -1743,9 +2233,16 @@ class WebGPUEditor {
   deleteSelectedNode() {
     if (!this.selectedNode || HELPER_MESHES.has(this.selectedNode.name)) return;
     const name = this.selectedNode.name;
+    const currentMode = this.selectionMode || 'whole';
+    const hadHighlight = Boolean(this.selectionMode === 'submesh');
     clearTimeout(this._saveTimer);
     this._commitSceneHistory();
-    this.undoStack.push({ scene: this._historyBaseline || this._captureSceneSnapshot(), selectedName: name });
+    this.undoStack.push({
+      scene: this._captureSceneSnapshot(),
+      selectedName: name,
+      selectionMode: currentMode,
+      applyHighlight: hadHighlight
+    });
     if (this.undoStack.length > 50) this.undoStack.shift();
     this.redoStack = [];
     this.selectedNode.dispose();

@@ -25,7 +25,7 @@ cd "$SCRIPT_DIR"
 clear
 echo ""
 echo -e "${WHITE}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${WHITE}║           CoreLink 3D  v1.1.0                ║${NC}"
+echo -e "${WHITE}║           CoreLink 3D  v1.2.0                ║${NC}"
 echo -e "${WHITE}║     3D Viewport Editor for macOS           ║${NC}"
 echo -e "${WHITE}╚══════════════════════════════════════════════╝${NC}"
 echo ""

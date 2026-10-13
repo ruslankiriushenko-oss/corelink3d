@@ -32,16 +32,19 @@ class AppController {
 
     // Clear old session data on fresh install (localStorage check)
     const installVersion = localStorage.getItem('corelink-install-version');
-    const currentVersion = '1.1.0';
+    const currentVersion = '1.2.0';
     
-    if (installVersion !== currentVersion) {
-      // New install or version change - clear all session data
-      console.log('[CoreLink 3D] Clearing old session data...');
+    if (!installVersion) {
+      // Fresh install - initialize clean session storage
+      console.log('[CoreLink 3D] Fresh install detected...');
       indexedDB.deleteDatabase('corelink3d-storage');
       localStorage.removeItem('corelink-scene-backup');
       localStorage.setItem('corelink-install-version', currentVersion);
       // Flag to indicate fresh install - don't create default cube
       localStorage.setItem('corelink-fresh-install', 'true');
+    } else if (installVersion !== currentVersion) {
+      // Version upgrade - keep existing saved scenes and update version tag
+      localStorage.setItem('corelink-install-version', currentVersion);
     }
 
     // Check if splash screen was already dismissed in session
