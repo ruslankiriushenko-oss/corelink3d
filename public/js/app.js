@@ -32,7 +32,7 @@ class AppController {
 
     // Clear old session data on fresh install (localStorage check)
     const installVersion = localStorage.getItem('corelink-install-version');
-    const currentVersion = '1.2.0';
+    const currentVersion = '1.3.0';
     
     if (!installVersion) {
       // Fresh install - initialize clean session storage

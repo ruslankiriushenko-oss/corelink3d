@@ -150,6 +150,20 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// The Clarity project id is public by design, but serving it from Railway's
+// environment keeps deployment-specific analytics configuration out of Git.
+// Whitelisting the expected identifier format prevents an env value from ever
+// becoming executable content in the browser.
+app.get('/runtime-config.js', (_req, res) => {
+  const configuredId = String(process.env.CLARITY_PROJECT_ID || '').trim();
+  const clarityProjectId = /^[A-Za-z0-9]{6,32}$/.test(configuredId) ? configuredId : '';
+  res.set({
+    'Cache-Control': 'no-store, max-age=0',
+    'Content-Type': 'application/javascript; charset=utf-8',
+  });
+  res.send(`window.__CORELINK_RUNTIME__ = Object.freeze({ clarityProjectId: ${JSON.stringify(clarityProjectId)} });`);
+});
 app.use(express.static(PUBLIC_DIR));
 
 // ── Multer ────────────────────────────────────────────────────

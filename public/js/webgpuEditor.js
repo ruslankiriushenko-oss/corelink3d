@@ -16,6 +16,16 @@ import {
  */
 
 const HELPER_MESHES = new Set(['StudioGround', 'StudioAxisX', 'StudioAxisZ']);
+// Slicing duplicates/intersects vertex data and captures an Undo snapshot.
+// Keep this synchronous editor action within a predictable frame budget.
+const MAX_SLICE_TRIANGLES = 75_000;
+const MAX_SLICE_VERTICES = 100_000;
+const MAX_SLICE_CAP_SEGMENTS = 2_048;
+// Imported assets can be made of several small meshes, but an occasional
+// glTF mesh is denser than a primitive.  This allowance applies only to the
+// dedicated GLB command; it never changes the responsive primitive command.
+const MAX_GLB_SLICE_TRIANGLES = 150_000;
+const MAX_GLB_SLICE_VERTICES = 200_000;
 
 class WebGPUEditor {
   constructor() {
@@ -32,6 +42,25 @@ class WebGPUEditor {
     this.camera = null;
     this.gizmoManager = null;
     this.highlightLayer = null;
+    this.ssaoPipeline = null;
+    this._ssaoPipelineType = null;
+    this.shadowGenerators = new Map();
+    this._iblEnvironmentTexture = null;
+    this._iblLoadPromise = null;
+    this._iblUnavailable = false;
+    this.worldSettings = {
+      ambientIntensity: 0.85,
+      iblIntensity: 1.0,
+      shadowQuality: 'medium',
+      ssaoEnabled: false,
+      ssaoRadius: 2.0,
+    };
+    this._worldSettingsInitialized = false;
+    this._sliceInProgress = false;
+    this._compositeSliceState = null;
+    // glTF importers do not all build the same parent/child hierarchy. Keep
+    // the exact imported mesh ids as a reliable fallback for GLB operations.
+    this._activeGlbMeshIds = new Set();
     this.isWebGPU = false;
     this.isOpen = false;
     this.selectedNode = null;
@@ -186,18 +215,6 @@ class WebGPUEditor {
     if (menuNewScene) menuNewScene.addEventListener('click', () => this.newScene());
     if (menuResetScene) menuResetScene.addEventListener('click', () => this.resetWorkspace());
 
-    // Shading Mode buttons
-    const shadingGroup = document.getElementById('shadingGroup');
-    if (shadingGroup) {
-      shadingGroup.addEventListener('click', (e) => {
-        const btn = e.target.closest('[data-shading]');
-        if (!btn) return;
-        shadingGroup.querySelectorAll('.b-shading-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.setShadingMode(btn.dataset.shading);
-      });
-    }
-
     // View Menu camera shortcuts
     const menuCamOrbit = document.getElementById('menuCamOrbit');
     const menuCamTop = document.getElementById('menuCamTop');
@@ -268,6 +285,7 @@ class WebGPUEditor {
     const menuMeshSmoothShading = document.getElementById('menuMeshSmoothShading');
     const menuMeshFlipNormals = document.getElementById('menuMeshFlipNormals');
     const menuMeshSlice = document.getElementById('menuMeshSlice');
+    const menuMeshDuplicateGlb = document.getElementById('menuMeshDuplicateGlb');
     const menuMeshToggleWireframe = document.getElementById('menuMeshToggleWireframe');
 
     if (menuMeshJoin) menuMeshJoin.addEventListener('click', () => this.joinSelected());
@@ -275,6 +293,7 @@ class WebGPUEditor {
     if (menuMeshSmoothShading) menuMeshSmoothShading.addEventListener('click', () => this.setSmoothShading());
     if (menuMeshFlipNormals) menuMeshFlipNormals.addEventListener('click', () => this.flipNormals());
     if (menuMeshSlice) menuMeshSlice.addEventListener('click', () => this.sliceMesh());
+    if (menuMeshDuplicateGlb) menuMeshDuplicateGlb.addEventListener('click', () => this.duplicateGlbModel());
     if (menuMeshToggleWireframe) menuMeshToggleWireframe.addEventListener('click', () => this.toggleWireframeMesh());
 
     // Left Shelf: Reset Material to Default Gray
@@ -416,7 +435,7 @@ class WebGPUEditor {
       } else if (!ctrlOrMeta && !e.shiftKey && !e.altKey && keyLower === 'r') {
         this.setGizmoMode('scaling');
       } else if (!ctrlOrMeta && !e.shiftKey && !e.altKey && keyLower === 'z') {
-        this.toggleWireframeMode();
+        // Wireframe toggle removed with Solid/PBR Shading
       } else if (!ctrlOrMeta && !e.shiftKey && !e.altKey && keyLower === 'g') {
         this.toggleGrid();
       } else if (key === 'F1') {
@@ -505,6 +524,9 @@ class WebGPUEditor {
       this._historyBaseline = this._captureSceneSnapshot();
 
       this._refreshSceneGraph();
+      this._initAllSliders(); // Initialize all slider track fills
+      this._initWorldSettings(); // Initialize World settings immediately
+      this._updateWorldSettings();
       this._hideLoader();
       this.log('Studio initialized successfully.', 'info');
 
@@ -576,6 +598,12 @@ class WebGPUEditor {
     if (badgeText) badgeText.textContent = this.isWebGPU ? 'WebGPU Native' : 'WebGL 2.0';
     if (this.engineBadge) this.engineBadge.className = `b-engine-badge ${this.isWebGPU ? 'webgpu' : 'webgl'}`;
 
+    // Update backend indicator in status bar
+    const backendText = document.getElementById('backendText');
+    if (backendText) {
+      backendText.textContent = this.isWebGPU ? 'WebGPU' : 'WebGL Fallback';
+    }
+
     this.engine.runRenderLoop(() => {
       if (!this.scene || !this.isOpen || this._renderingFailed) return;
       try {
@@ -599,13 +627,22 @@ class WebGPUEditor {
    */
   async _initScene() {
     this._disposeHighlightLayer();
+    this._disposeWorldEffects();
+    // An environment request belongs to the scene that started it.  Do not
+    // let a late response from a previous editor scene bleed into this one.
+    this._iblLoadPromise = null;
+    this._iblEnvironmentTexture = null;
+    this._iblUnavailable = false;
     if (this.scene) {
       this.scene.dispose();
     }
+    this._activeGlbMeshIds.clear();
 
     const scene = new BABYLON.Scene(this.engine);
     this.scene = scene;
-    scene.clearColor = new BABYLON.Color4(0.34, 0.34, 0.34, 1.0); // Light neutral Blender gray
+    // Keep the neutral, light-gray editor background. It gives the grid and
+    // model shadows enough contrast without turning the empty viewport black.
+    scene.clearColor = new BABYLON.Color4(0.34, 0.34, 0.35, 1.0);
 
     // Perspective / Orbit Camera
     const camera = new BABYLON.ArcRotateCamera(
@@ -625,7 +662,7 @@ class WebGPUEditor {
 
     // Soft Studio Lighting
     const hemi = new BABYLON.HemisphericLight('AmbientLight', new BABYLON.Vector3(0, 1, 0), scene);
-    hemi.intensity = 0.85;
+    hemi.intensity = 0.6;
     hemi.groundColor = new BABYLON.Color3(0.18, 0.18, 0.2);
     hemi.diffuse = new BABYLON.Color3(0.9, 0.9, 0.92);
 
@@ -639,28 +676,52 @@ class WebGPUEditor {
     dirFill.intensity = 0.45;
     dirFill.diffuse = new BABYLON.Color3(0.85, 0.9, 0.95);
 
+    // Keep the baseline strengths separate from World Environment controls.
+    hemi.metadata = { worldAmbientBase: hemi.intensity };
+    dirKey.metadata = { worldShadowCaster: true };
+
     // Infinite Seamless Floor Grid (1000x1000 with distance/horizon fade)
     const ground = BABYLON.MeshBuilder.CreateGround('StudioGround', { width: 1000, height: 1000 }, scene);
     ground.position.y = 0;
     ground.isPickable = false;
 
-    if (BABYLON.GridMaterial) {
-      const gridMat = new BABYLON.GridMaterial('GroundGridMat', scene);
-      gridMat.majorUnitFrequency = 5;
-      gridMat.minorUnitVisibility = 0.55;
-      gridMat.gridRatio = 1.0;
-      gridMat.mainColor = new BABYLON.Color4(0.34, 0.34, 0.34, 1.0);
-      gridMat.lineColor = new BABYLON.Color4(0.12, 0.12, 0.12, 0.95);
-      gridMat.opacity = 0.98;
-      gridMat.fadeDistance = 150;
-      ground.material = gridMat;
-    } else {
-      const groundMat = new BABYLON.StandardMaterial('GroundMat', scene);
-      groundMat.diffuseColor = new BABYLON.Color3(0.34, 0.34, 0.34);
-      groundMat.specularColor = new BABYLON.Color3(0, 0, 0);
-      groundMat.wireframe = false;
-      ground.material = groundMat;
+    // GridMaterial does not consistently receive Babylon shadow maps across
+    // the WebGL/WebGPU backends. Draw the grid into the same StandardMaterial
+    // that receives shadows instead of stacking two near-coplanar planes.
+    // One surface prevents z-fighting/light flicker while orbiting the camera.
+    const groundMat = new BABYLON.StandardMaterial('GroundMat', scene);
+    groundMat.diffuseColor = new BABYLON.Color3(0.72, 0.73, 0.76);
+    groundMat.specularColor = new BABYLON.Color3(0, 0, 0);
+    groundMat.ambientColor = new BABYLON.Color3(0.28, 0.28, 0.3);
+    // A small self-lit component keeps the grid readable even when the user
+    // lowers Ambient Intensity, while the diffuse component still receives
+    // visible directional shadows.
+    groundMat.emissiveColor = new BABYLON.Color3(0.11, 0.11, 0.12);
+    groundMat.wireframe = false;
+    const gridTexture = new BABYLON.DynamicTexture('StudioGridTexture', { width: 512, height: 512 }, scene, false);
+    const gridContext = gridTexture.getContext();
+    gridContext.fillStyle = '#737780';
+    gridContext.fillRect(0, 0, 512, 512);
+    for (let line = 0; line <= 16; line += 1) {
+      const coordinate = line * 32;
+      gridContext.beginPath();
+      gridContext.strokeStyle = line % 4 === 0 ? '#292d35' : '#50545c';
+      gridContext.lineWidth = line % 4 === 0 ? 2 : 1;
+      gridContext.moveTo(coordinate, 0);
+      gridContext.lineTo(coordinate, 512);
+      gridContext.moveTo(0, coordinate);
+      gridContext.lineTo(512, coordinate);
+      gridContext.stroke();
     }
+    gridTexture.hasAlpha = false;
+    gridTexture.wrapU = BABYLON.Texture.WRAP_ADDRESSMODE;
+    gridTexture.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
+    gridTexture.uScale = 62.5;
+    gridTexture.vScale = 62.5;
+    gridTexture.anisotropicFilteringLevel = 8;
+    gridTexture.update(false);
+    groundMat.diffuseTexture = gridTexture;
+    ground.material = groundMat;
 
     // Bold, Vibrant Self-Illuminated Red X-Axis
     const axisXPath = [new BABYLON.Vector3(-500, 0.003, 0), new BABYLON.Vector3(500, 0.003, 0)];
@@ -975,6 +1036,7 @@ class WebGPUEditor {
       target: this.camera.target ? this.camera.target.clone() : null
     } : null;
 
+    this._disposeWorldEffects();
     const restoredScene = await this._loadSerializedScene(snapshot);
     const previousScene = this.scene;
     this.gizmoManager?.dispose();
@@ -1005,6 +1067,7 @@ class WebGPUEditor {
     this._initGizmoManager();
     this._bindScenePicking(restoredScene);
     this._refreshSceneGraph();
+    this._updateWorldSettings();
 
     const restoredSelection = selectedName ? (restoredScene.getNodeByName(selectedName) || restoredScene.getMeshByName(selectedName)) : null;
     this.selectNode(restoredSelection, selectionMode, applyHighlight && Boolean(restoredSelection));
@@ -1103,6 +1166,7 @@ class WebGPUEditor {
       if (saved && saved.scene) {
         console.log('[WebGPUEditor] Restoring saved scene from IndexedDB...');
         const json = typeof saved.scene === 'string' ? saved.scene : JSON.stringify(saved.scene);
+        this._disposeWorldEffects();
         const restoredScene = await this._loadSerializedScene(json);
         const previousScene = this.scene;
         this.gizmoManager?.dispose();
@@ -1122,6 +1186,7 @@ class WebGPUEditor {
         this._bindScenePicking(restoredScene);
         this.selectedNode = null;
         this._refreshSceneGraph();
+        this._updateWorldSettings();
         this.log('Session restored successfully.', 'info');
         return;
       }
@@ -1221,6 +1286,8 @@ class WebGPUEditor {
     }
 
     this._refreshSceneGraph();
+    this._applyIblIntensity(this.worldSettings.iblIntensity);
+    this._applyShadowQuality(this.worldSettings.shadowQuality);
     this.selectNode(node, 'whole', false);
     this._scheduleSceneSave();
     this._saveCurrentModelAsDefault();
@@ -1243,10 +1310,10 @@ class WebGPUEditor {
   /** Import a glTF model or CoreLink project bundle into the editor. */
   async importEditorFile(file) {
     if (!file) return;
-    this.log(`Importing ${file.name}...`, 'info');
-    const ext = file.name.split('.').pop().toLowerCase();
 
     try {
+      const { filename, extension: ext } = await validateModelFile(file, file.name);
+      this.log(`Importing ${filename}...`, 'info');
       this._setLoader(`Loading ${file.name}...`);
       if (ext === 'cl3d') {
         const bundle = await projectBundle.importBundle(file);
@@ -1255,7 +1322,7 @@ class WebGPUEditor {
         }
       } else if (['glb', 'gltf'].includes(ext)) {
         const buffer = await file.arrayBuffer();
-        await this._loadModelFromBuffer(buffer, file.name);
+        await this._loadModelFromBuffer(buffer, filename);
       } else {
         throw new Error('Supported formats: .glb, .gltf, .cl3d');
       }
@@ -1277,6 +1344,7 @@ class WebGPUEditor {
     this.scene.meshes.slice().forEach(m => {
       if (!HELPER_MESHES.has(m.name)) m.dispose();
     });
+    this._activeGlbMeshIds.clear();
 
     const blob = new Blob([buffer], { type: 'model/gltf-binary' });
     const url = URL.createObjectURL(blob);
@@ -1289,9 +1357,16 @@ class WebGPUEditor {
         // Pre-compute matrices, refresh bounding info & pre-warm GPU pipelines
         // to eliminate initial micro-stutter / lag on first interaction
         result.meshes.forEach(m => {
+          m.metadata = { ...(m.metadata || {}), coreLinkAssetKind: 'glb-mesh' };
           if (m.computeWorldMatrix) m.computeWorldMatrix(true);
           if (m.refreshBoundingInfo) m.refreshBoundingInfo(true);
         });
+        this._activeGlbMeshIds = new Set(
+          result.meshes
+            .filter((m) => m instanceof BABYLON.Mesh && m.getVerticesData(BABYLON.VertexBuffer.PositionKind)?.length)
+            .map((m) => m.uniqueId)
+        );
+        root.metadata = { ...(root.metadata || {}), coreLinkAssetKind: 'glb-root' };
 
         if (this.scene.whenReadyAsync) {
           await this.scene.whenReadyAsync();
@@ -1304,6 +1379,8 @@ class WebGPUEditor {
         }
 
         this.frameSelected(root);
+        this._applyIblIntensity(this.worldSettings.iblIntensity);
+        this._applyShadowQuality(this.worldSettings.shadowQuality);
         this.selectNode(root, 'whole', false);
         if (this.modelInfo) this.modelInfo.textContent = `Scene: ${filename}`;
         saveEditorModelFile({ name: filename, buffer, size: buffer.byteLength }).catch(() => {});
@@ -1832,35 +1909,370 @@ class WebGPUEditor {
   }
 
   /**
+   * Duplicate a compound imported GLB without copying GPU buffers, textures,
+   * or materials. Babylon mesh clones safely share immutable geometry and
+   * PBR resources, so this stays responsive even for detailed assets.
+   */
+  _duplicateGlbMeshes(target, sourceMeshes) {
+    if (this._sliceInProgress || !this.scene || !sourceMeshes.length) return;
+    this._sliceInProgress = true;
+    const duplicates = [];
+    try {
+      sourceMeshes.forEach((mesh) => mesh.computeWorldMatrix(true));
+      const triangleCount = sourceMeshes.reduce((total, mesh) => total + ((mesh.getIndices()?.length || 0) / 3), 0);
+      // Scene serialization duplicates all vertex arrays. Keep Undo for small
+      // assets, but do not lock the editor after duplicating a dense GLB.
+      const historySnapshot = triangleCount <= 30_000 ? this._captureSceneSnapshot() : null;
+      const bounds = sourceMeshes.map((mesh) => mesh.getBoundingInfo().boundingBox);
+      const minX = Math.min(...bounds.map((box) => box.minimumWorld.x));
+      const maxX = Math.max(...bounds.map((box) => box.maximumWorld.x));
+      const offsetX = Math.max((maxX - minX) * 1.12, 0.5);
+      const cloneBySource = new Map();
+      const copyTag = `Copy_${Date.now()}`;
+
+      // First clone every render mesh.  `clone` shares the original vertex
+      // buffers and materials, avoiding the texture loss and frame hitch that
+      // came from creating a second set of clip-plane materials.
+      sourceMeshes.forEach((source, index) => {
+        const copy = source.clone(`${source.name}_${copyTag}_${index}`, null, true);
+        if (!copy) throw new Error(`Could not duplicate ${source.name}`);
+        copy.metadata = { ...(source.metadata || {}), coreLinkAssetKind: 'glb-duplicate' };
+        copy.isPickable = source.isPickable;
+        duplicates.push(copy);
+        cloneBySource.set(source, copy);
+      });
+
+      // Restore mesh-to-mesh parent relations inside the duplicate. Meshes
+      // whose parent is a TransformNode remain under the original transform,
+      // which is safe because only the duplicate root meshes are offset.
+      sourceMeshes.forEach((source) => {
+        const copy = cloneBySource.get(source);
+        if (cloneBySource.has(source.parent)) {
+          copy.parent = cloneBySource.get(source.parent);
+        } else {
+          copy.parent = source.parent || null;
+        }
+      });
+      sourceMeshes.forEach((source) => {
+        if (!cloneBySource.has(source.parent)) {
+          cloneBySource.get(source).translate(BABYLON.Axis.X, offsetX, BABYLON.Space.WORLD);
+        }
+      });
+
+      this._refreshSceneGraph();
+      this.selectNodes(duplicates, 'whole', true);
+      if (historySnapshot) {
+        this.undoStack.push({
+          scene: historySnapshot,
+          selectedName: target.name,
+          selectionMode: 'whole',
+          applyHighlight: false,
+        });
+        if (this.undoStack.length > 50) this.undoStack.shift();
+        this.redoStack = [];
+      }
+      this._historyBaseline = historySnapshot ? this._captureSceneSnapshot() : null;
+      if (triangleCount <= 30_000) {
+        this._scheduleSceneSave({ recordHistory: false });
+      }
+      const performanceNotice = historySnapshot ? '' : ' Session save and Undo were skipped to keep this dense GLB responsive.';
+      this.log(`Duplicated GLB object: ${target.name}.${performanceNotice}`, 'info');
+    } catch (error) {
+      duplicates.forEach((mesh) => {
+        try { mesh.dispose(true, false); } catch (_) { /* best effort */ }
+      });
+      console.error('[WebGPUEditor] GLB duplication failed:', error);
+      this.log(`Duplicate Object GLB failed: ${error.message}`, 'error');
+    } finally {
+      this._sliceInProgress = false;
+    }
+  }
+
+  /** Resolve the complete imported asset and duplicate it as one object. */
+  duplicateGlbModel(target = this.selectedNode) {
+    if (!target || !this.scene) {
+      this.log('Select an imported GLB model to duplicate', 'warn');
+      return;
+    }
+
+    let root = target;
+    let cursor = target;
+    while (cursor) {
+      if (cursor.metadata?.coreLinkAssetKind === 'glb-root') {
+        root = cursor;
+        break;
+      }
+      cursor = cursor.parent;
+    }
+    // Restored sessions may predate the GLB metadata marker. In that case use
+    // the highest scene-node ancestor as the imported-model root.
+    if (root === target) {
+      while (
+        root.parent
+        && (root.parent instanceof BABYLON.AbstractMesh || root.parent instanceof BABYLON.TransformNode)
+        && !HELPER_MESHES.has(root.parent.name)
+      ) {
+        root = root.parent;
+      }
+    }
+
+    const positionKind = BABYLON.VertexBuffer.PositionKind;
+    // Some exporters place render meshes alongside the synthetic root rather
+    // than beneath it.  Combine hierarchy discovery with the ids registered
+    // when this GLB was imported, then de-duplicate the result.
+    const hierarchyMeshes = [root, ...(root.getChildMeshes?.(false) || [])];
+    const trackedImportedMeshes = this.scene.meshes.filter((mesh) => (
+      this._activeGlbMeshIds.has(mesh.uniqueId)
+      || mesh.metadata?.coreLinkAssetKind === 'glb-mesh'
+    ));
+    const candidates = [...hierarchyMeshes, ...trackedImportedMeshes]
+      .filter((mesh, index, all) => (
+        mesh instanceof BABYLON.Mesh
+        && !HELPER_MESHES.has(mesh.name)
+        && mesh.getVerticesData(positionKind)
+        && mesh.getIndices()?.length
+        && all.indexOf(mesh) === index
+      ));
+
+    if (!candidates.length) {
+      this.log('Duplicate Object GLB could not find render geometry below the selected model', 'warn');
+      return;
+    }
+
+    this._duplicateGlbMeshes(root, candidates);
+  }
+
+  /**
+   * GLB-specific bisect. Every render mesh is clipped against one shared
+   * world-space plane through the complete asset. This is equivalent to a
+   * Blender group bisect: it preserves the source transforms/materials and
+   * does not collapse an imported hierarchy into a lossy temporary mesh.
+   */
+  async _sliceGlbModelGeometry(root, sourceMeshes) {
+    if (this._sliceInProgress) return;
+    this._clearCompositeSlice();
+
+    const triangleCount = sourceMeshes.reduce((total, mesh) => total + (mesh.getIndices()?.length || 0) / 3, 0);
+    const vertexCount = sourceMeshes.reduce((total, mesh) => total + mesh.getTotalVertices(), 0);
+    let minY = Infinity;
+    let maxY = -Infinity;
+    sourceMeshes.forEach((mesh) => {
+      mesh.computeWorldMatrix(true);
+      const box = mesh.getBoundingInfo().boundingBox;
+      minY = Math.min(minY, box.minimumWorld.y);
+      maxY = Math.max(maxY, box.maximumWorld.y);
+    });
+    if (!Number.isFinite(minY) || !Number.isFinite(maxY) || Math.abs(maxY - minY) < 1e-6) {
+      this.log('Slice Mesh GLB could not calculate a valid model height.', 'warn');
+      return;
+    }
+
+    const planePointWorld = new BABYLON.Vector3(0, (minY + maxY) / 2, 0);
+    // A GLB may consist of many meshes. Limit each operation instead of the
+    // sum, so a normal multi-part character is not rejected just because all
+    // of its parts together have a high triangle count.
+    const sliceable = sourceMeshes.filter((mesh) => {
+      const indices = mesh.getIndices();
+      return indices?.length
+        && mesh.getTotalVertices() <= MAX_GLB_SLICE_VERTICES
+        && indices.length / 3 <= MAX_GLB_SLICE_TRIANGLES;
+    });
+    if (!sliceable.length) {
+      this.log(`Slice Mesh GLB skipped: every render mesh exceeds the ${MAX_GLB_SLICE_TRIANGLES.toLocaleString()}-triangle limit.`, 'warn');
+      return;
+    }
+
+    this._sliceInProgress = true;
+    const keepHistory = triangleCount <= 30_000;
+    const historyBeforeSlice = keepHistory ? this._captureSceneSnapshot() : null;
+    try {
+      const pieces = [];
+      for (let index = 0; index < sliceable.length; index += 1) {
+        const mesh = sliceable[index];
+        const result = this.sliceMesh(mesh, {
+          batch: true,
+          forceTarget: true,
+          skipHistory: true,
+          skipFinalize: true,
+          planePointWorld,
+          maxTriangles: MAX_GLB_SLICE_TRIANGLES,
+          maxVertices: MAX_GLB_SLICE_VERTICES,
+        });
+        if (result?.upperMesh) pieces.push(result.upperMesh);
+        if (result?.lowerMesh) pieces.push(result.lowerMesh);
+        // Do not monopolize the main thread for a multi-part imported model.
+        // One mesh still slices atomically, but the viewport can paint between
+        // components instead of appearing frozen for the entire GLB.
+        if (index < sliceable.length - 1 && index % 2 === 1) {
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      }
+      if (!pieces.length) {
+        this.log('Slice Mesh GLB did not produce valid geometric halves.', 'warn');
+        return;
+      }
+
+      clearTimeout(this._saveTimer);
+      if (historyBeforeSlice) {
+        this.undoStack.push({
+          scene: historyBeforeSlice,
+          selectedName: root.name,
+          selectionMode: 'whole',
+          applyHighlight: true,
+        });
+        if (this.undoStack.length > 50) this.undoStack.shift();
+        this.redoStack = [];
+      }
+      this._refreshSceneGraph();
+      this.selectNodes(pieces, 'whole', true);
+      this._historyBaseline = this._captureSceneSnapshot();
+      this._scheduleSceneSave({ recordHistory: false });
+      const skipped = sourceMeshes.length - sliceable.length;
+      const historyNotice = keepHistory ? '' : ' Undo skipped for this dense model.';
+      const skippedNotice = skipped ? ` ${skipped} over-limit mesh(es) were left unchanged.` : '';
+      this.log(`Slice Mesh GLB completed: ${root.name} was bisected on one shared world plane.${skippedNotice}${historyNotice}`, 'info');
+    } catch (error) {
+      console.error('[WebGPUEditor] GLB slice failed:', error);
+      this.log(`Slice Mesh GLB failed: ${error.message}`, 'error');
+    } finally {
+      this._sliceInProgress = false;
+    }
+  }
+
+  /**
+   * Blender-style group bisect: perform the real geometry operation on every
+   * child mesh of an imported model, then update the editor only once.
+   */
+  _sliceCompoundGeometry(target, meshes) {
+    if (this._sliceInProgress) return;
+    this._clearCompositeSlice();
+    const sliceable = meshes.filter((mesh) => {
+      const indices = mesh.getIndices();
+      return indices?.length
+        && mesh.getTotalVertices() <= MAX_SLICE_VERTICES
+        && indices.length / 3 <= MAX_SLICE_TRIANGLES;
+    });
+    if (!sliceable.length) {
+      this.log(`Slice Mesh skipped: ${target.name} has no meshes within the safe geometry limit.`, 'warn');
+      return;
+    }
+
+    const skippedCount = meshes.length - sliceable.length;
+    const totalTriangles = sliceable.reduce((total, mesh) => total + mesh.getIndices().length / 3, 0);
+    // A full serialized Undo snapshot of a large, newly doubled GLB is more
+    // expensive than the cut itself. Keep Undo for normal assets; prioritise
+    // responsiveness for dense imported scenes.
+    const keepHistory = totalTriangles <= 30_000;
+    if (keepHistory) {
+      clearTimeout(this._saveTimer);
+      this.undoStack.push({
+        scene: this._captureSceneSnapshot(),
+        selectedName: target.name,
+        selectionMode: 'whole',
+        applyHighlight: true,
+      });
+      if (this.undoStack.length > 50) this.undoStack.shift();
+      this.redoStack = [];
+    }
+
+    this._sliceInProgress = true;
+    const pieces = [];
+    try {
+      sliceable.forEach((mesh) => {
+        const result = this.sliceMesh(mesh, { batch: true, forceTarget: true, skipHistory: true, skipFinalize: true });
+        if (result?.upperMesh) pieces.push(result.upperMesh);
+        if (result?.lowerMesh) pieces.push(result.lowerMesh);
+      });
+      if (!pieces.length) {
+        this.log('Slice Mesh did not produce geometry for this model.', 'warn');
+        return;
+      }
+      this._refreshSceneGraph();
+      this.selectNodes(pieces, 'whole', true);
+      if (keepHistory) {
+        this._historyBaseline = this._captureSceneSnapshot();
+        this._scheduleSceneSave({ recordHistory: false });
+      }
+      const capNotice = totalTriangles > 30_000 ? ' (history skipped to keep the editor responsive)' : '';
+      const skippedNotice = skippedCount ? `; ${skippedCount} over-limit mesh(es) left unchanged` : '';
+      this.log(`Sliced ${target.name}: ${pieces.length} real mesh parts created${skippedNotice}${capNotice}.`, 'info');
+    } catch (error) {
+      console.error('[WebGPUEditor] Compound slice failed:', error);
+      this.log(`Slice failed: ${error.message}`, 'error');
+    } finally {
+      this._sliceInProgress = false;
+    }
+  }
+
+  /**
    * Slice the selected mesh along a cutting plane through its center.
    * Full solid polygon clipping with automatic Cap Holes / Fill Caps generation,
    * proper normal orientation, planar UV mapping, and two-sided rendering.
    */
-  sliceMesh(target = this.selectedNode) {
+  sliceMesh(target = this.selectedNode, {
+    batch = false,
+    forceTarget = false,
+    skipHistory = false,
+    skipFinalize = false,
+    planePointWorld = null,
+    maxTriangles = MAX_SLICE_TRIANGLES,
+    maxVertices = MAX_SLICE_VERTICES,
+  } = {}) {
     if (!target) {
       this.log('Select a mesh to slice', 'warn');
-      return;
+      return null;
+    }
+    if (this._sliceInProgress && !batch) {
+      this.log('Slice Mesh is already processing', 'warn');
+      return null;
     }
 
-    let meshToSlice = null;
-    if (target instanceof BABYLON.Mesh && target.getVerticesData(BABYLON.VertexBuffer.PositionKind)) {
-      meshToSlice = target;
-    } else if (target.getChildMeshes) {
-      meshToSlice = target.getChildMeshes(false).find(m => m instanceof BABYLON.Mesh && m.getVerticesData(BABYLON.VertexBuffer.PositionKind));
+    const positionKind = BABYLON.VertexBuffer.PositionKind;
+    // Imported GLB roots are often Babylon Mesh objects themselves, but their
+    // visible geometry lives in descendants. Prefer all real descendants over
+    // the root wrapper; the old ternary selected the wrapper alone and made
+    // Slice Mesh appear to do nothing for exactly this kind of asset.
+    const descendantMeshes = forceTarget ? [] : (target.getChildMeshes?.(false) || []).filter((mesh) => (
+      mesh instanceof BABYLON.Mesh
+      && mesh !== target
+      && mesh.getVerticesData(positionKind)
+      && mesh.getIndices()?.length
+    ));
+    const candidates = descendantMeshes.length
+      ? descendantMeshes
+      : (target instanceof BABYLON.Mesh && target.getVerticesData(positionKind) && target.getIndices()?.length ? [target] : []);
+
+    // The generic command is intentionally for one mesh/primitives only.
+    // Compound imported assets use the dedicated Slice Mesh GLB menu action.
+    if (candidates.length > 1) {
+      if (!batch) this.log('This is a compound model. Use Mesh → Slice Mesh GLB.', 'warn');
+      return null;
     }
+    const meshToSlice = candidates[0] || null;
 
     if (!meshToSlice) {
       this.log('Selected object has no polygon geometry to slice', 'warn');
-      return;
+      return null;
     }
 
+    const preflightIndices = meshToSlice.getIndices();
+    const vertexCount = meshToSlice.getTotalVertices();
+    const triangleCount = Math.floor((preflightIndices?.length || 0) / 3);
+    if (!preflightIndices?.length || vertexCount > maxVertices || triangleCount > maxTriangles) {
+      this.log(`Slice Mesh skipped: ${meshToSlice.name} exceeds the safe geometry limit (${triangleCount.toLocaleString()} triangles).`, 'warn');
+      return null;
+    }
+
+    if (!batch) this._sliceInProgress = true;
     try {
       console.log('[WebGPUEditor] Starting solid mesh slice for:', meshToSlice.name);
 
       // Шаг 1: Секущая плоскость — горизонтальная через центр меша в мировом пространстве
       meshToSlice.computeWorldMatrix(true);
       const boundingInfo = meshToSlice.getBoundingInfo();
-      const centerWorld = boundingInfo.boundingBox.centerWorld.clone();
+      // GLB group slicing passes one world-space center for every child mesh;
+      // primitives simply use their own center as before.
+      const centerWorld = planePointWorld?.clone() || boundingInfo.boundingBox.centerWorld.clone();
       const planeNormalWorld = new BABYLON.Vector3(0, 1, 0); // горизонтальный срез
 
       // Переводим секущую плоскость в локальное пространство меша
@@ -2044,7 +2456,7 @@ class WebGPUEditor {
       }
 
       // Шаг 5: Автоматическая генерация закрывающих крышек среза (Cap Holes / Fill Caps)
-      if (cutSegments.length >= 3) {
+      if (cutSegments.length >= 3 && cutSegments.length <= MAX_SLICE_CAP_SEGMENTS) {
         let capX = 0, capY = 0, capZ = 0;
         for (const seg of cutSegments) {
           capX += seg.p1.x + seg.p2.x;
@@ -2106,6 +2518,22 @@ class WebGPUEditor {
       // Шаг 6: Создание двух новых независимых мешей
       let upperMesh = null;
       let lowerMesh = null;
+      // Apply the visual separation in the source mesh's local space. The old
+      // implementation added a world-space Y value to a local position, which
+      // rotated/skewed imported glTF nodes and made models appear to fall over.
+      const localHeight = Math.max(meshToSlice.getBoundingInfo().boundingBox.extendSize.y * 2, 0.1);
+      // Make an actual slice immediately legible, rather than leaving a
+      // sub-pixel 0.04-unit gap on a normally scaled imported character.
+      const separation = Math.min(Math.max(localHeight * 0.06, 0.03), 0.5);
+      const offsetPositions = (positions, direction) => {
+        for (let i = 0; i < positions.length; i += 3) {
+          positions[i] += planeNormalLocal.x * separation * direction;
+          positions[i + 1] += planeNormalLocal.y * separation * direction;
+          positions[i + 2] += planeNormalLocal.z * separation * direction;
+        }
+      };
+      offsetPositions(upperPositions, 1);
+      offsetPositions(lowerPositions, -1);
 
       if (upperIndices.length > 0) {
         upperMesh = new BABYLON.Mesh(`${meshToSlice.name}_Upper`, this.scene);
@@ -2144,58 +2572,61 @@ class WebGPUEditor {
       configureMaterial(upperMesh);
       configureMaterial(lowerMesh);
 
-      // Шаг 8: Трансформации и аккуратное визуальное разведение половин
-      const separation = 0.08; // небольшой зазор для наглядности разреза
-      const offsetVecWorld = planeNormalWorld.scale(separation);
-
-      if (upperMesh) {
-        if (meshToSlice.parent) upperMesh.parent = meshToSlice.parent;
-        upperMesh.position = meshToSlice.position.add(offsetVecWorld);
-        upperMesh.rotation = meshToSlice.rotation.clone();
-        upperMesh.scaling = meshToSlice.scaling.clone();
-        upperMesh.computeWorldMatrix(true);
-        upperMesh.refreshBoundingInfo();
-      }
-
-      if (lowerMesh) {
-        if (meshToSlice.parent) lowerMesh.parent = meshToSlice.parent;
-        lowerMesh.position = meshToSlice.position.subtract(offsetVecWorld);
-        lowerMesh.rotation = meshToSlice.rotation.clone();
-        lowerMesh.scaling = meshToSlice.scaling.clone();
-        lowerMesh.computeWorldMatrix(true);
-        lowerMesh.refreshBoundingInfo();
-      }
+      // Шаг 8: Клонируем локальную трансформацию исходного mesh без смешения
+      // координат parent/world. Это сохраняет ориентацию glTF-узлов.
+      const copySourceTransform = (mesh) => {
+        if (!mesh) return;
+        mesh.parent = meshToSlice.parent || null;
+        mesh.position.copyFrom(meshToSlice.position);
+        mesh.scaling.copyFrom(meshToSlice.scaling);
+        mesh.rotation.copyFrom(meshToSlice.rotation);
+        mesh.rotationQuaternion = meshToSlice.rotationQuaternion?.clone() || null;
+        mesh.visibility = meshToSlice.visibility;
+        mesh.isPickable = meshToSlice.isPickable;
+        mesh.computeWorldMatrix(true);
+        mesh.refreshBoundingInfo();
+      };
+      copySourceTransform(upperMesh);
+      copySourceTransform(lowerMesh);
 
       // Шаг 9: Запись в историю Undo/Redo и удаление исходного меша
-      clearTimeout(this._saveTimer);
-      this._commitSceneHistory();
-      this.undoStack.push({
-        scene: this._captureSceneSnapshot(),
-        selectedName: meshToSlice.name,
-        selectionMode: 'whole',
-        applyHighlight: false
-      });
-      if (this.undoStack.length > 50) this.undoStack.shift();
-      this.redoStack = [];
-
-      meshToSlice.dispose();
-
-      this._refreshSceneGraph();
-
-      if (upperMesh) {
-        this.selectNode(upperMesh, 'whole', false);
-      } else if (lowerMesh) {
-        this.selectNode(lowerMesh, 'whole', false);
+      if (!skipHistory) {
+        clearTimeout(this._saveTimer);
+        this._commitSceneHistory();
+        this.undoStack.push({
+          scene: this._captureSceneSnapshot(),
+          selectedName: meshToSlice.name,
+          selectionMode: 'whole',
+          applyHighlight: false
+        });
+        if (this.undoStack.length > 50) this.undoStack.shift();
+        this.redoStack = [];
       }
 
-      this._historyBaseline = this._captureSceneSnapshot();
-      this._scheduleSceneSave({ recordHistory: false });
+      // Do not recursively dispose sibling/child glTF nodes during a grouped
+      // bisect; each source mesh is processed independently above.
+      meshToSlice.dispose(true, false);
+
+      if (!skipFinalize) {
+        this._refreshSceneGraph();
+        if (upperMesh) {
+          this.selectNode(upperMesh, 'whole', true);
+        } else if (lowerMesh) {
+          this.selectNode(lowerMesh, 'whole', true);
+        }
+        this._historyBaseline = this._captureSceneSnapshot();
+        this._scheduleSceneSave({ recordHistory: false });
+      }
 
       this.log(`Mesh cleanly sliced into solid parts with Fill Caps: ${upperMesh ? upperMesh.name : ''} & ${lowerMesh ? lowerMesh.name : ''}`, 'info');
+      return { upperMesh, lowerMesh };
 
     } catch (e) {
       console.error('[WebGPUEditor] Slice failed:', e);
       this.log(`Slice failed: ${e.message}`, 'error');
+      return null;
+    } finally {
+      if (!batch) this._sliceInProgress = false;
     }
   }
 
@@ -2332,25 +2763,6 @@ class WebGPUEditor {
         this.camera.beta = Math.PI / 3;
         break;
     }
-  }
-
-  setShadingMode(mode) {
-    if (!this.scene) return;
-    this.scene.meshes.forEach(m => {
-      if (HELPER_MESHES.has(m.name)) return;
-      if (m.material) {
-        if (mode === 'wireframe') {
-          m.material.wireframe = true;
-        } else {
-          m.material.wireframe = false;
-        }
-      }
-    });
-  }
-
-  toggleWireframeMode() {
-    const isWire = this.scene?.meshes.some(m => !HELPER_MESHES.has(m.name) && m.material?.wireframe);
-    this.setShadingMode(isWire ? 'pbr' : 'wireframe');
   }
 
   toggleNativeInspector() {
@@ -2598,7 +3010,18 @@ class WebGPUEditor {
     slider.style.setProperty('--val-percent', `${percent}%`);
   }
 
+  _initAllSliders() {
+    // Initialize all sliders on page load to ensure correct track fill
+    const sliders = document.querySelectorAll('.b-slider');
+    sliders.forEach(slider => {
+      this._updateSliderStyle(slider);
+    });
+  }
+
   _syncInspector() {
+    // Initialize World settings event listeners once
+    this._initWorldSettings();
+
     const emptyState = document.getElementById('inspectorEmptyState');
     const content = document.getElementById('inspectorContent');
     if (!this.selectedNode) {
@@ -2707,6 +3130,302 @@ class WebGPUEditor {
         if (lightHex) lightHex.value = hex;
       }
     }
+
+    this._syncWorldSettingsUI();
+  }
+
+  _initWorldSettings() {
+    // Initialize World settings event listeners once
+    if (this._worldSettingsInitialized) return;
+    this._worldSettingsInitialized = true;
+
+    // Ambient Intensity
+    const ambientIntensity = document.getElementById('inspAmbientIntensity');
+    const ambientIntensityVal = document.getElementById('inspAmbientIntensityVal');
+    if (ambientIntensity) {
+      this._updateSliderStyle(ambientIntensity);
+      ambientIntensity.addEventListener('input', () => {
+        const val = parseFloat(ambientIntensity.value);
+        if (ambientIntensityVal) ambientIntensityVal.textContent = val.toFixed(2);
+        this._updateSliderStyle(ambientIntensity);
+        this._applyAmbientIntensity(val);
+      });
+    }
+
+    // IBL Intensity
+    const iblIntensity = document.getElementById('inspIBLIntensity');
+    const iblIntensityVal = document.getElementById('inspIBLIntensityVal');
+    if (iblIntensity) {
+      this._updateSliderStyle(iblIntensity);
+      iblIntensity.addEventListener('input', () => {
+        const val = parseFloat(iblIntensity.value);
+        if (iblIntensityVal) iblIntensityVal.textContent = val.toFixed(2);
+        this._updateSliderStyle(iblIntensity);
+        this._applyIblIntensity(val);
+      });
+    }
+
+    const shadowQuality = document.getElementById('inspShadowQuality');
+    if (shadowQuality) {
+      const applyQuality = () => this._applyShadowQuality(shadowQuality.value);
+      shadowQuality.addEventListener('input', applyQuality);
+      shadowQuality.addEventListener('change', applyQuality);
+    }
+
+    const ssaoCheck = document.getElementById('inspSSAO');
+    if (ssaoCheck) {
+      ssaoCheck.addEventListener('change', () => {
+        this._setSSAOEnabled(ssaoCheck.checked);
+      });
+    }
+
+    // SSAO Radius - Re-enabled with proper binding
+    const ssaoRadius = document.getElementById('inspSSAORadius');
+    const ssaoRadiusVal = document.getElementById('inspSSAORadiusVal');
+    if (ssaoRadius) {
+      this._updateSliderStyle(ssaoRadius);
+      const applyRadius = () => {
+        const val = parseFloat(ssaoRadius.value);
+        if (ssaoRadiusVal) ssaoRadiusVal.textContent = val.toFixed(1);
+        this._updateSliderStyle(ssaoRadius);
+        this._applySSAORadius(val);
+      };
+      // Radius has no observable effect while SSAO is disabled. Make a direct
+      // interaction with its control enable the effect first; this guarantees
+      // a working slider rather than a value that appears to do nothing.
+      ssaoRadius.addEventListener('pointerdown', () => {
+        if (!this.worldSettings.ssaoEnabled) {
+          this._setSSAOEnabled(true);
+          const control = document.getElementById('inspSSAO');
+          if (control) control.checked = this.worldSettings.ssaoEnabled;
+        }
+      });
+      ssaoRadius.addEventListener('input', applyRadius);
+      ssaoRadius.addEventListener('change', applyRadius);
+    }
+  }
+
+  _updateWorldSettings() {
+    this._applyAmbientIntensity(this.worldSettings.ambientIntensity);
+    this._applyIblIntensity(this.worldSettings.iblIntensity);
+    this._applyShadowQuality(this.worldSettings.shadowQuality);
+    this._setSSAOEnabled(this.worldSettings.ssaoEnabled);
+  }
+
+  _syncWorldSettingsUI() {
+    const controls = [
+      ['inspAmbientIntensity', 'inspAmbientIntensityVal', this.worldSettings.ambientIntensity, 2],
+      ['inspIBLIntensity', 'inspIBLIntensityVal', this.worldSettings.iblIntensity, 2],
+      ['inspSSAORadius', 'inspSSAORadiusVal', this.worldSettings.ssaoRadius, 1],
+    ];
+    controls.forEach(([inputId, valueId, value, digits]) => {
+      const input = document.getElementById(inputId);
+      const label = document.getElementById(valueId);
+      if (input) { input.value = value; this._updateSliderStyle(input); }
+      if (label) label.textContent = Number(value).toFixed(digits);
+    });
+    const quality = document.getElementById('inspShadowQuality');
+    if (quality) quality.value = this.worldSettings.shadowQuality;
+    const ssao = document.getElementById('inspSSAO');
+    if (ssao) ssao.checked = this.worldSettings.ssaoEnabled;
+  }
+
+  _applyAmbientIntensity(value) {
+    const intensity = BABYLON.Scalar.Clamp(Number(value) || 0, 0, 3);
+    this.worldSettings.ambientIntensity = intensity;
+    if (!this.scene) return;
+    // A hemispheric light affects Standard, PBR and imported glTF materials;
+    // scene.ambientColor alone does not reliably do so for PBR.
+    this.scene.lights
+      .filter((light) => light instanceof BABYLON.HemisphericLight)
+      .forEach((light) => {
+        const base = Number(light.metadata?.worldAmbientBase ?? 1);
+        light.intensity = base * intensity;
+      });
+    this.scene.ambientColor = new BABYLON.Color3(intensity, intensity, intensity);
+  }
+
+  _applyIblIntensity(value) {
+    const intensity = BABYLON.Scalar.Clamp(Number(value) || 0, 0, 2);
+    this.worldSettings.iblIntensity = intensity;
+    if (!this.scene) return;
+    this._ensureIblEnvironment();
+    // Babylon PBRMaterial owns the IBL multiplier. Apply it to every material
+    // so imported models respond immediately, whether or not an environment is set.
+    this.scene.materials.forEach((material) => {
+      if (!('environmentIntensity' in material)) return;
+      material.environmentIntensity = intensity;
+      // A GLB can have PBR materials but no environment texture. In that case
+      // environmentIntensity alone is mathematically invisible. Preserve the
+      // intended physical IBL path, but provide a reversible luminance fallback
+      // so this control still responds for every imported model.
+      const metadata = material.metadata || (material.metadata = {});
+      if (metadata.worldIblDirectBase === undefined) {
+        metadata.worldIblDirectBase = Number(material.directIntensity ?? 1);
+      }
+      material.directIntensity = this.scene.environmentTexture && !this._iblUnavailable
+        ? metadata.worldIblDirectBase
+        : metadata.worldIblDirectBase * (0.55 + intensity * 0.45);
+    });
+    // Retain the value on the scene for subsequently imported PBR materials.
+    this.scene.metadata = { ...(this.scene.metadata || {}), worldIblIntensity: intensity };
+  }
+
+  _ensureIblEnvironment() {
+    if (!this.scene || this.scene.environmentTexture || this._iblLoadPromise) return;
+    // PBR's IBL multiplier has no visible effect without a reflection source.
+    // This neutral, prefiltered Babylon environment is applied only to the
+    // editor scene, never to the separate preview workspace.
+    const targetScene = this.scene;
+    this._iblLoadPromise = new Promise((resolve) => {
+      try {
+        const texture = BABYLON.CubeTexture.CreateFromPrefilteredData(
+          'https://assets.babylonjs.com/environments/environmentSpecular.env',
+          this.scene,
+          1,
+          () => {
+            const sceneDisposed = typeof targetScene?.isDisposed === 'function'
+              ? targetScene.isDisposed()
+              : Boolean(targetScene?.isDisposed);
+            if (this.scene === targetScene && !sceneDisposed) {
+              targetScene.environmentTexture = texture;
+              this._iblEnvironmentTexture = texture;
+              this._iblUnavailable = false;
+              // Reapply both the physical IBL value and the fallback direct
+              // lighting multiplier.  The latter must return to its baseline
+              // once a real environment becomes available.
+              this._applyIblIntensity(this.worldSettings.iblIntensity);
+            } else {
+              texture.dispose();
+            }
+            resolve();
+          },
+          () => {
+            texture.dispose();
+            this._iblUnavailable = true;
+            this._applyIblIntensity(this.worldSettings.iblIntensity);
+            resolve();
+          }
+        );
+      } catch (error) {
+        console.warn('[WebGPUEditor] Default IBL environment could not be loaded:', error);
+        resolve();
+      }
+    }).finally(() => { this._iblLoadPromise = null; });
+  }
+
+  _applyShadowQuality(quality) {
+    const sizes = { off: 0, low: 1024, medium: 2048, high: 4096 };
+    const selected = Object.hasOwn(sizes, quality) ? quality : 'medium';
+    this.worldSettings.shadowQuality = selected;
+    this._disposeShadowGenerators();
+    if (!this.scene || sizes[selected] === 0 || !BABYLON.ShadowGenerator) return;
+
+    const casters = this.scene.meshes.filter((mesh) => !HELPER_MESHES.has(mesh.name) && mesh.getTotalVertices?.() > 0);
+    const ground = this.scene.getMeshByName('StudioGround');
+    if (ground) ground.receiveShadows = true;
+    this.scene.lights
+      .filter((light) => light instanceof BABYLON.DirectionalLight || light instanceof BABYLON.SpotLight)
+      .forEach((light) => {
+        try {
+          const generator = new BABYLON.ShadowGenerator(sizes[selected], light);
+          light.autoCalcShadowZBounds = true;
+          // The default shadow-map path is supported by both WebGL2 and
+          // WebGPU. Blur filters are backend-dependent and were the reason
+          // quality changes could be accepted in the UI yet never render.
+          generator.bias = selected === 'low' ? 0.0015 : selected === 'medium' ? 0.001 : 0.0005;
+          generator.normalBias = selected === 'low' ? 0.03 : selected === 'medium' ? 0.02 : 0.01;
+          casters.forEach((mesh) => {
+            mesh.receiveShadows = true;
+            generator.addShadowCaster(mesh, true);
+          });
+          this.shadowGenerators.set(light.uniqueId, generator);
+        } catch (error) {
+          console.warn('[WebGPUEditor] Shadow generator unavailable for light:', light.name, error);
+        }
+      });
+    // The normal render loop will present the rebuilt generators. Rendering
+    // once here gives immediate feedback without allowing a transient engine
+    // error to break the settings control.
+    try { this.scene.render(); } catch (_) { /* render loop recovers next frame */ }
+  }
+
+  _disposeShadowGenerators() {
+    this.shadowGenerators.forEach((generator) => {
+      try { generator.dispose(); } catch (_) { /* best effort */ }
+    });
+    this.shadowGenerators.clear();
+  }
+
+  _setSSAOEnabled(enabled) {
+    this.worldSettings.ssaoEnabled = Boolean(enabled);
+    this._disposeSSAO();
+    if (!enabled || !this.scene || !this.camera) return;
+    try {
+      if (BABYLON.SSAO2RenderingPipeline) {
+        const pipeline = new BABYLON.SSAO2RenderingPipeline('world-ssao', this.scene, {
+          ssaoRatio: 0.5,
+          blurRatio: 0.75,
+        }, [this.camera]);
+        pipeline.radius = this.worldSettings.ssaoRadius;
+        pipeline.base = 0.0;
+        pipeline.totalStrength = 0.65;
+        pipeline.expensive = false;
+        this.ssaoPipeline = pipeline;
+        this._ssaoPipelineType = 'ssao2';
+      } else if (BABYLON.DefaultRenderingPipeline) {
+        // Some Babylon builds do not expose SSAO2. The default pipeline has
+        // an equivalent AO pass and is a safe rendering fallback.
+        const pipeline = new BABYLON.DefaultRenderingPipeline('world-ssao-fallback', true, this.scene, [this.camera]);
+        pipeline.fxaaEnabled = false;
+        pipeline.bloomEnabled = false;
+        pipeline.chromaticAberrationEnabled = false;
+        pipeline.grainEnabled = false;
+        pipeline.sharpenEnabled = false;
+        pipeline.imageProcessingEnabled = false;
+        pipeline.ambientOcclusionEnabled = true;
+        pipeline.ambientOcclusionRadius = this.worldSettings.ssaoRadius;
+        pipeline.ambientOcclusionStrength = 0.65;
+        this.ssaoPipeline = pipeline;
+        this._ssaoPipelineType = 'default';
+      } else {
+        throw new Error('No ambient-occlusion pipeline is available');
+      }
+    } catch (error) {
+      this.worldSettings.ssaoEnabled = false;
+      const control = document.getElementById('inspSSAO');
+      if (control) control.checked = false;
+      console.warn('[WebGPUEditor] SSAO is unavailable on this graphics backend:', error);
+    }
+  }
+
+  _disposeSSAO() {
+    if (!this.ssaoPipeline) return;
+    try {
+      this.scene?.postProcessRenderPipelineManager?.detachCamerasFromRenderPipeline(this.ssaoPipeline.name, this.camera ? [this.camera] : undefined);
+      this.ssaoPipeline.dispose();
+    } catch (error) {
+      console.warn('[WebGPUEditor] SSAO cleanup notice:', error);
+    }
+    this.ssaoPipeline = null;
+    this._ssaoPipelineType = null;
+  }
+
+  _applySSAORadius(value) {
+    const radius = BABYLON.Scalar.Clamp(Number(value) || 0.5, 0.5, 5);
+    this.worldSettings.ssaoRadius = radius;
+    if (this.ssaoPipeline) {
+      if (this._ssaoPipelineType === 'default') {
+        this.ssaoPipeline.ambientOcclusionRadius = radius;
+      } else {
+        this.ssaoPipeline.radius = radius;
+      }
+    }
+  }
+
+  _disposeWorldEffects() {
+    this._disposeSSAO();
+    this._disposeShadowGenerators();
   }
 
   _updateTelemetry() {

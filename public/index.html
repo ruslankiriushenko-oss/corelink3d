@@ -49,16 +49,21 @@
   </script>
 
   <!-- ── MICROSOFT CLARITY ─────────────────────────────────────
-       ВАЖНО: Для включения Clarity замените type="text/disabled"
-       на type="text/javascript" и укажите реальный Project ID из
-       https://clarity.microsoft.com → Settings → Overview → Code
+       Set CLARITY_PROJECT_ID in Railway Variables. The loader stays off
+       locally and in preview deployments until a valid ID is configured.
   ─────────────────────────────────────────────────────────────── -->
-  <script type="text/disabled" id="clarity-script">
-    (function(c,l,a,r,i,t,y){
-      c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-      t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-      y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-    })(window,document,"clarity","script","XXXXXXXXXX");
+  <script src="/runtime-config.js"></script>
+  <script>
+    (function (c, l, a, r) {
+      const projectId = c.__CORELINK_RUNTIME__?.clarityProjectId;
+      if (!/^[A-Za-z0-9]{6,32}$/.test(projectId || '')) return;
+      c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments); };
+      const tag = l.createElement(r);
+      tag.async = true;
+      tag.src = 'https://www.clarity.ms/tag/' + projectId;
+      tag.onerror = function () { console.warn('[CoreLink 3D] Microsoft Clarity did not load.'); };
+      l.head.appendChild(tag);
+    })(window, document, 'clarity', 'script');
   </script>
 
   
@@ -342,6 +347,10 @@
               <span class="b-dropdown-label">Slice Mesh</span>
               <span class="b-dropdown-shortcut">Ctrl+K</span>
             </button>
+            <button type="button" class="b-dropdown-item" id="menuMeshDuplicateGlb">
+              <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5 12 2l8 4.5v9L12 20l-8-4.5z"/><path d="M12 2v18"/><path d="M4 11h16"/><path d="M2.5 12h19"/></svg></span>
+              <span class="b-dropdown-label b-dropdown-label-stack"><span>Duplicate Object</span><span>GLB</span></span>
+            </button>
             <div class="b-dropdown-divider"></div>
             <button type="button" class="b-dropdown-item" id="menuMeshToggleWireframe">
               <span class="b-dropdown-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" stroke-dasharray="3 3"/></svg></span>
@@ -358,11 +367,6 @@
       <div class="b-mode-pill">Object Mode</div>
       
       <div class="b-view-controls">
-        <div class="b-shading-group" id="shadingGroup" title="Viewport Shading">
-          <button type="button" class="b-shading-btn active" data-shading="pbr" title="Solid / PBR Shading">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="9"/></svg>
-          </button>
-        </div>
       </div>
     </div>
 
@@ -508,6 +512,10 @@
           <button type="button" class="b-prop-tab" data-tab="material" title="Material Editor (PBR)" role="tab">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18v-18z"/></svg>
             <span>Material</span>
+          </button>
+          <button type="button" class="b-prop-tab" data-tab="world" title="World Environment" role="tab">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span>World</span>
           </button>
         </div>
 
@@ -671,6 +679,60 @@
             </details>
           </div>
 
+          <!-- TAB 3: WORLD ENVIRONMENT -->
+          <div class="b-tab-pane" id="paneWorld">
+            <details class="b-accordion" open>
+              <summary class="b-acc-summary">
+                <span class="b-acc-arrow">▾</span>
+                <span class="b-acc-title">Environment & Lighting</span>
+              </summary>
+              <div class="b-acc-body">
+                <!-- Ambient Intensity -->
+                <div class="b-slider-row">
+                  <div class="b-slider-header">
+                    <label for="inspAmbientIntensity" class="b-label">Ambient Intensity</label>
+                    <span class="b-slider-val" id="inspAmbientIntensityVal">0.60</span>
+                  </div>
+                  <input type="range" id="inspAmbientIntensity" min="0" max="3" step="0.1" value="0.6" class="b-slider" />
+                </div>
+
+                <!-- IBL Intensity -->
+                <div class="b-slider-row">
+                  <div class="b-slider-header">
+                    <label for="inspIBLIntensity" class="b-label">IBL Intensity</label>
+                    <span class="b-slider-val" id="inspIBLIntensityVal">1.00</span>
+                  </div>
+                  <input type="range" id="inspIBLIntensity" min="0" max="2" step="0.1" value="1.0" class="b-slider" />
+                </div>
+
+                <!-- Shadow Quality -->
+                <div class="b-field-row">
+                  <label for="inspShadowQuality" class="b-label">Shadow Quality</label>
+                  <select id="inspShadowQuality" class="b-select">
+                    <option value="off">Off</option>
+                    <option value="low">Low (1024)</option>
+                    <option value="medium" selected>Medium (2048)</option>
+                    <option value="high">High (4096)</option>
+                  </select>
+                </div>
+
+                <!-- SSAO -->
+                <div class="b-checkbox-row">
+                  <label class="b-check-label"><input type="checkbox" id="inspSSAO" /> Enable SSAO</label>
+                </div>
+
+                <!-- SSAO Radius -->
+                <div class="b-slider-row">
+                  <div class="b-slider-header">
+                    <label for="inspSSAORadius" class="b-label">SSAO Radius</label>
+                    <span class="b-slider-val" id="inspSSAORadiusVal">2.0</span>
+                  </div>
+                  <input type="range" id="inspSSAORadius" min="0.5" max="5" step="0.1" value="2.0" class="b-slider" />
+                </div>
+              </div>
+            </details>
+          </div>
+
         </div>
       </section>
 
@@ -682,8 +744,11 @@
   <!-- 3. BOTTOM STATUS BAR (KEYMAP & TELEMETRY)                         -->
   <!-- ================================================================= -->
   <footer class="b-statusbar">
+    <div class="b-status-left">
+      <span id="backendText">WebGPU</span>
+    </div>
     <div class="b-status-right">
-      <span>CoreLink 3D v1.2.0</span>
+      <span>CoreLink 3D v1.3.0</span>
     </div>
   </footer>
 
